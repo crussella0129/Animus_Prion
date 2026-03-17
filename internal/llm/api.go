@@ -10,9 +10,9 @@ import (
 	"time"
 )
 
-// OpenAIProvider communicates with OpenAI-compatible APIs.
-// Supports OpenAI, vLLM, LM Studio, and any OpenAI-compatible endpoint.
-type OpenAIProvider struct {
+// LocalProvider communicates with local LLM servers via OpenAI-compatible API.
+// Works with llama-server, vLLM, LM Studio, Ollama, and similar endpoints.
+type LocalProvider struct {
 	baseURL    string
 	apiKey     string
 	model      string
@@ -20,8 +20,8 @@ type OpenAIProvider struct {
 	caps       ModelCapabilities
 }
 
-// OpenAIConfig holds configuration for the OpenAI provider.
-type OpenAIConfig struct {
+// LocalProviderConfig holds configuration for the local provider.
+type LocalProviderConfig struct {
 	BaseURL       string
 	APIKey        string
 	Model         string
@@ -29,22 +29,22 @@ type OpenAIConfig struct {
 	SizeTier      string
 }
 
-// NewOpenAIProvider creates an OpenAI-compatible API provider.
-func NewOpenAIProvider(cfg OpenAIConfig) *OpenAIProvider {
+// NewLocalProvider creates a local LLM provider using the OpenAI-compatible protocol.
+func NewLocalProvider(cfg LocalProviderConfig) *LocalProvider {
 	if cfg.BaseURL == "" {
-		cfg.BaseURL = "https://api.openai.com/v1"
+		cfg.BaseURL = "http://127.0.0.1:8080/v1"
 	}
 	if cfg.APIKey == "" {
-		cfg.APIKey = os.Getenv("OPENAI_API_KEY")
+		cfg.APIKey = "not-needed" // local servers don't require keys
 	}
 	if cfg.ContextLength == 0 {
-		cfg.ContextLength = 8192
+		cfg.ContextLength = 4096
 	}
 	if cfg.SizeTier == "" {
-		cfg.SizeTier = "large"
+		cfg.SizeTier = "medium"
 	}
 
-	return &OpenAIProvider{
+	return &LocalProvider{
 		baseURL: cfg.BaseURL,
 		apiKey:  cfg.APIKey,
 		model:   cfg.Model,
@@ -52,22 +52,29 @@ func NewOpenAIProvider(cfg OpenAIConfig) *OpenAIProvider {
 		caps: ModelCapabilities{
 			ContextLength: cfg.ContextLength,
 			SizeTier:      cfg.SizeTier,
-			SupportsTools: true,
-			SupportsJSON:  true,
+			SupportsTools: false, // most local models don't support native tool calling
+			SupportsJSON:  false,
 		},
 	}
 }
 
-func (p *OpenAIProvider) Available() bool {
-	return p.apiKey != ""
+func (p *LocalProvider) Available() bool {
+	// Check if the server is reachable
+	resp, err := p.client.Get(p.baseURL + "/../health")
+	if err != nil {
+		// Fall back: assume available if configured
+		return p.baseURL != ""
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode == 200
 }
 
-func (p *OpenAIProvider) Capabilities() ModelCapabilities {
+func (p *LocalProvider) Capabilities() ModelCapabilities {
 	return p.caps
 }
 
-// openAIRequest is the request body for the chat completions endpoint.
-type openAIRequest struct {
+// chatRequest is the request body for the chat completions endpoint.
+type chatRequest struct {
 	Model       string    `json:"model"`
 	Messages    []Message `json:"messages"`
 	Temperature float64   `json:"temperature,omitempty"`
@@ -76,8 +83,8 @@ type openAIRequest struct {
 	Stop        []string  `json:"stop,omitempty"`
 }
 
-// openAIResponse is the response from the chat completions endpoint.
-type openAIResponse struct {
+// chatResponse is the response from the chat completions endpoint.
+type chatResponse struct {
 	Choices []struct {
 		Message struct {
 			Content   string     `json:"content"`
@@ -91,8 +98,8 @@ type openAIResponse struct {
 	} `json:"error"`
 }
 
-func (p *OpenAIProvider) Generate(messages []Message, opts GenerateOptions) (string, error) {
-	reqBody := openAIRequest{
+func (p *LocalProvider) Generate(messages []Message, opts GenerateOptions) (string, error) {
+	reqBody := chatRequest{
 		Model:       p.model,
 		Messages:    messages,
 		Temperature: opts.Temperature,
@@ -100,12 +107,9 @@ func (p *OpenAIProvider) Generate(messages []Message, opts GenerateOptions) (str
 		Stop:        opts.StopTokens,
 	}
 
-	if len(opts.Tools) > 0 {
-		toolsAny := make([]any, len(opts.Tools))
-		for i, t := range opts.Tools {
-			toolsAny[i] = t
-		}
-		reqBody.Tools = toolsAny
+	// Only send tools if the model supports them
+	if len(opts.Tools) > 0 && p.caps.SupportsTools {
+		reqBody.Tools = opts.Tools
 	}
 
 	body, err := json.Marshal(reqBody)
@@ -118,11 +122,13 @@ func (p *OpenAIProvider) Generate(messages []Message, opts GenerateOptions) (str
 		return "", fmt.Errorf("creating request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+p.apiKey)
+	if p.apiKey != "" && p.apiKey != "not-needed" {
+		req.Header.Set("Authorization", "Bearer "+p.apiKey)
+	}
 
 	resp, err := p.client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("API request failed: %w", err)
+		return "", fmt.Errorf("local LLM request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -131,13 +137,13 @@ func (p *OpenAIProvider) Generate(messages []Message, opts GenerateOptions) (str
 		return "", fmt.Errorf("reading response: %w", err)
 	}
 
-	var result openAIResponse
+	var result chatResponse
 	if err := json.Unmarshal(respBody, &result); err != nil {
 		return "", fmt.Errorf("parsing response: %w", err)
 	}
 
 	if result.Error != nil {
-		return "", fmt.Errorf("API error (%s): %s", result.Error.Type, result.Error.Message)
+		return "", fmt.Errorf("LLM error (%s): %s", result.Error.Type, result.Error.Message)
 	}
 
 	if len(result.Choices) == 0 {
@@ -223,7 +229,6 @@ type anthropicResponse struct {
 }
 
 func (p *AnthropicProvider) Generate(messages []Message, opts GenerateOptions) (string, error) {
-	// Extract system message and convert format
 	var system string
 	var apiMessages []anthropicMessage
 
@@ -234,7 +239,7 @@ func (p *AnthropicProvider) Generate(messages []Message, opts GenerateOptions) (
 		}
 		role := m.Role
 		if role == "tool" {
-			role = "user" // Anthropic uses user role for tool results
+			role = "user"
 		}
 		apiMessages = append(apiMessages, anthropicMessage{
 			Role:    role,

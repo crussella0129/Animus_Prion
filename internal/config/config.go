@@ -49,12 +49,12 @@ type Config struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Model: ModelConfig{
-			Provider:      "openai",
-			ModelName:     "gpt-4",
+			Provider:      "local",
+			ModelName:     "qwen2.5-coder-7b",
 			Temperature:   0.7,
-			ContextLength: 8192,
+			ContextLength: 4096,
 			GPULayers:     -1,
-			SizeTier:      "large",
+			SizeTier:      "medium",
 		},
 		Agent: AgentConfig{
 			MaxTurns:         20,

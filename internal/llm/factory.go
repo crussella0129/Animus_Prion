@@ -7,10 +7,12 @@ import (
 )
 
 // NewProvider creates an LLM provider from configuration.
+// "local" is the default — connects to any OpenAI-compatible endpoint (llama-server, vLLM, etc.)
 func NewProvider(cfg *config.Config) (Provider, error) {
 	switch cfg.Model.Provider {
-	case "openai":
-		return NewOpenAIProvider(OpenAIConfig{
+	case "local", "openai-compatible":
+		// Local inference via OpenAI-compatible API (llama-server, vLLM, LM Studio, etc.)
+		return NewLocalProvider(LocalProviderConfig{
 			BaseURL:       cfg.Model.BaseURL,
 			APIKey:        cfg.Model.APIKey,
 			Model:         cfg.Model.ModelName,
@@ -25,12 +27,8 @@ func NewProvider(cfg *config.Config) (Provider, error) {
 			ContextLength: cfg.Model.ContextLength,
 		}), nil
 
-	case "native":
-		// Native provider (llama.cpp) will be implemented later
-		return nil, fmt.Errorf("native provider not yet implemented — use openai or anthropic")
-
 	default:
-		return nil, fmt.Errorf("unknown provider: %s", cfg.Model.Provider)
+		return nil, fmt.Errorf("unknown provider: %s (use 'local' or 'anthropic')", cfg.Model.Provider)
 	}
 }
 
