@@ -21,9 +21,9 @@
 - [x] Phase 7: Tool tests — filesystem, shell, execution budget (16 tests)
 - [x] Phase 8: Manifold retrieval — router (hardcoded classification), executor (RRF fusion)
 - [x] Phase 9: Knowledge graph — Go AST parsing, SQLite graph DB, incremental indexer
-- [ ] Phase 10: Vector store — SQLite-backed embedding storage with KNN search
-- [ ] Phase 11: Wire retrieval + knowledge graph into agent as tool
-- [ ] Phase 12: README.md with usage documentation
+- [x] Phase 10: Vector store — SQLite-backed embedding storage with KNN search
+- [x] Phase 11: Wire retrieval + knowledge graph into agent as ManifoldSearchTool
+- [x] Phase 12: README.md with usage documentation
 
 ## Backlog
 
@@ -33,8 +33,11 @@
 - [ ] CI/CD with GitHub Actions
 - [ ] Streaming support for API providers
 - [ ] Session persistence and transcript recording
+- [ ] Integration test with real LLM (gauntlet)
+- [ ] Embedding provider implementation (OpenAI text-embedding-3-small)
 
 ## Completed (Recent)
 
 - [x] Phase 0-6 complete — Entry #1
 - [x] Phase 7-9 complete — Entry #2
+- [x] Phase 10-12 complete — Entry #3
