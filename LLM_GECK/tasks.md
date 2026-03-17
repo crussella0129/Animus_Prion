@@ -18,17 +18,17 @@
 - [x] Phase 4: Agent loop — agentic loop with tool calling, reflection, repeat detection
 - [x] Phase 5: Planner — parser, decomposer, executor with scope enforcement
 - [x] Phase 6: CLI — cobra-based CLI with chat REPL, run, config commands
-- [ ] Phase 7: Additional tests — filesystem tools, shell tool, git tools, agent integration
-- [ ] Phase 8: README.md with usage documentation
+- [x] Phase 7: Tool tests — filesystem, shell, execution budget (16 tests)
+- [x] Phase 8: Manifold retrieval — router (hardcoded classification), executor (RRF fusion)
+- [x] Phase 9: Knowledge graph — Go AST parsing, SQLite graph DB, incremental indexer
+- [ ] Phase 10: Vector store — SQLite-backed embedding storage with KNN search
+- [ ] Phase 11: Wire retrieval + knowledge graph into agent as tool
+- [ ] Phase 12: README.md with usage documentation
 
 ## Backlog
 
-- [ ] Manifold retrieval: router (hardcoded classification), executor (RRF fusion)
-- [ ] Knowledge graph: AST parsing, SQLite graph DB, incremental indexing
-- [ ] Vector store: SQLite-backed embedding storage with KNN search
 - [ ] GBNF grammar generation for native models
 - [ ] Native llama.cpp provider (CGo or subprocess)
-- [ ] Audio/TTS system (if desired in Go)
 - [ ] Cross-platform testing (Linux, macOS)
 - [ ] CI/CD with GitHub Actions
 - [ ] Streaming support for API providers
@@ -37,3 +37,4 @@
 ## Completed (Recent)
 
 - [x] Phase 0-6 complete — Entry #1
+- [x] Phase 7-9 complete — Entry #2

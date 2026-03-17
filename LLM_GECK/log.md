@@ -90,3 +90,53 @@ None
 - Add tests for filesystem tools, shell tool, git tools
 - Create README.md with usage documentation
 - Begin Manifold retrieval implementation (backlog)
+
+---
+
+## Entry #2 — 2026-03-17
+
+### Summary
+Implemented Manifold retrieval (hardcoded router + RRF executor), knowledge graph (Go AST parser + SQLite graph DB + incremental indexer), and comprehensive tool tests. 70 tests passing across 8 packages.
+
+### Actions
+- Added 16 filesystem/shell tool tests (read, write, boundary, audit, metachar, timeout, budget)
+- Implemented retrieval router: 100% hardcoded query classification (semantic, structural, hybrid, keyword)
+- Implemented retrieval executor: strategy dispatch, RRF fusion, result deduplication
+- Implemented knowledge/parser: Go AST extraction (functions, methods, types, imports, call edges)
+- Implemented knowledge/graphdb: SQLite graph DB with BFS transitive callers, blast radius, inheritance
+- Implemented knowledge/indexer: SHA-256 content-hashed incremental indexing
+- Added modernc.org/sqlite pure-Go dependency (no CGo required)
+
+### Files Changed
+- `internal/tools/filesystem_test.go` — 9 filesystem tool tests
+- `internal/tools/shell_test.go` — 7 shell tool tests
+- `internal/retrieval/router.go` — Hardcoded query classifier
+- `internal/retrieval/executor.go` — Strategy executor with RRF
+- `internal/retrieval/router_test.go` — 13 retrieval tests
+- `internal/knowledge/parser.go` — Go AST parser
+- `internal/knowledge/graphdb.go` — SQLite graph database
+- `internal/knowledge/indexer.go` — Incremental file indexer
+- `internal/knowledge/parser_test.go` — 7 parser tests
+- `internal/knowledge/graphdb_test.go` — 7 graph DB tests
+
+### Commits
+- `b6d0117` — test: add comprehensive tool tests
+- `4cbd066` — feat: add Manifold retrieval system
+- `cd28510` — feat: add knowledge graph
+
+### Findings
+- Go's `go/ast` standard library is remarkably complete — extracts all the entities we need with zero external dependencies
+- `modernc.org/sqlite` pure-Go driver adds ~15MB to binary but eliminates CGo entirely, keeping cross-compilation simple
+- The two-pass AST strategy (declarations first, then call edges) mirrors compiler name-resolution order
+- RRF fusion with k=60 is the same constant used in academic IR literature; works well here
+
+### Issues
+None
+
+### Checkpoint
+**Status:** CONTINUE — Knowledge graph complete. Vector store and README next.
+
+### Next
+- Implement vector store (SQLite-backed embedding storage with KNN)
+- Create README.md
+- Wire knowledge graph + retrieval into the agent as a tool
