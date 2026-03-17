@@ -11,13 +11,15 @@
 
 ## Current Sprint
 
-- [ ] Phase 0: Project scaffold — Go module, directory structure, GECK init
-- [ ] Phase 1: Core packages — config, workspace, permissions, errors
-- [ ] Phase 2: Tool framework — registry, shell, filesystem, git tools
-- [ ] Phase 3: LLM provider abstraction — provider interface, OpenAI/Anthropic API clients
-- [ ] Phase 4: Agent loop — agentic loop, tool parsing, context management
-- [ ] Phase 5: Planner — parser, decomposer, executor with scope enforcement
-- [ ] Phase 6: CLI — cobra-based CLI with REPL and slash commands
+- [x] Phase 0: Project scaffold — Go module, directory structure, GECK init
+- [x] Phase 1: Core packages — config, workspace, permissions, errors, context, message, toolparse
+- [x] Phase 2: Tool framework — registry, shell, filesystem, git tools
+- [x] Phase 3: LLM provider abstraction — provider interface, OpenAI/Anthropic API clients, factory
+- [x] Phase 4: Agent loop — agentic loop with tool calling, reflection, repeat detection
+- [x] Phase 5: Planner — parser, decomposer, executor with scope enforcement
+- [x] Phase 6: CLI — cobra-based CLI with chat REPL, run, config commands
+- [ ] Phase 7: Additional tests — filesystem tools, shell tool, git tools, agent integration
+- [ ] Phase 8: README.md with usage documentation
 
 ## Backlog
 
@@ -25,10 +27,13 @@
 - [ ] Knowledge graph: AST parsing, SQLite graph DB, incremental indexing
 - [ ] Vector store: SQLite-backed embedding storage with KNN search
 - [ ] GBNF grammar generation for native models
+- [ ] Native llama.cpp provider (CGo or subprocess)
 - [ ] Audio/TTS system (if desired in Go)
 - [ ] Cross-platform testing (Linux, macOS)
 - [ ] CI/CD with GitHub Actions
+- [ ] Streaming support for API providers
+- [ ] Session persistence and transcript recording
 
 ## Completed (Recent)
 
-(none yet)
+- [x] Phase 0-6 complete — Entry #1
