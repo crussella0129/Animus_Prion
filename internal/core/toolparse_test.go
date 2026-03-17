@@ -55,6 +55,35 @@ func TestParseEmptyInput(t *testing.T) {
 	}
 }
 
+func TestParseNestedJSON(t *testing.T) {
+	// This previously failed with the regex-only parser — nested braces in arguments
+	input := `I'll run the build: {"name": "run_shell", "arguments": {"command": {"cmd": "cargo build"}}}`
+	calls := ParseToolCalls(input)
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 call for nested JSON, got %d", len(calls))
+	}
+	if calls[0].Name != "run_shell" {
+		t.Errorf("expected name 'run_shell', got '%s'", calls[0].Name)
+	}
+}
+
+func TestParseMultipleToolCalls(t *testing.T) {
+	input := `First: {"name": "write_file", "arguments": {"path": "a.txt", "content": "hello"}}
+Then: {"name": "write_file", "arguments": {"path": "b.txt", "content": "world"}}`
+	calls := ParseToolCalls(input)
+	if len(calls) < 2 {
+		t.Errorf("expected at least 2 calls, got %d", len(calls))
+	}
+}
+
+func TestExtractBalancedJSON(t *testing.T) {
+	input := `text before {"name": "test", "arguments": {"nested": {"deep": true}}} text after`
+	results := extractBalancedJSON(input)
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+}
+
 func TestDeduplicateToolCalls(t *testing.T) {
 	calls := []ToolCall{
 		{Name: "read_file", Arguments: map[string]interface{}{"path": "a.txt"}},

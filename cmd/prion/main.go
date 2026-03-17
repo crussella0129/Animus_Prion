@@ -15,6 +15,7 @@ import (
 	"github.com/crussella0129/Animus_Prion/internal/core"
 	"github.com/crussella0129/Animus_Prion/internal/llm"
 	"github.com/crussella0129/Animus_Prion/internal/permission"
+	"github.com/crussella0129/Animus_Prion/internal/planner"
 	"github.com/crussella0129/Animus_Prion/internal/tools"
 	"github.com/spf13/cobra"
 )
@@ -105,24 +106,47 @@ func chatCmd() *cobra.Command {
 }
 
 // runCmd executes a single task and exits.
+// Routes complex tasks through PlanExecutor (with verify/repair and completeness checks).
+// Simple tasks go through the raw agent loop for speed.
 func runCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "run [task]",
 		Short: "Execute a single task",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ag, err := setupAgent()
-			if err != nil {
-				return err
-			}
-
 			task := strings.Join(args, " ")
-			response, err := ag.Run(task)
+
+			// Simple tasks → agent loop (fast path)
+			if planner.IsSimpleTask(task) {
+				ag, err := setupAgent()
+				if err != nil {
+					return err
+				}
+				response, err := ag.Run(task)
+				if err != nil {
+					return err
+				}
+				fmt.Println(response)
+				return nil
+			}
+
+			// Complex tasks → plan-then-execute (with verify + completeness)
+			env, err := setupEnv()
+			if err != nil {
+				return err
+			}
+			pe := planner.NewPlanExecutor(env.provider, env.registry, env.workspace)
+			result, err := pe.Execute(task)
 			if err != nil {
 				return err
 			}
 
-			fmt.Println(response)
+			if result.Summary != "" {
+				fmt.Println(result.Summary)
+			}
+			if !result.Success {
+				fmt.Fprintf(os.Stderr, "Warning: some steps failed\n")
+			}
 			return nil
 		},
 	}
@@ -191,8 +215,16 @@ func configCmd() *cobra.Command {
 	return cmd
 }
 
-// setupAgent creates a fully configured agent.
-func setupAgent() (*agent.Agent, error) {
+// env holds the shared components needed by both the agent and planner.
+type env struct {
+	provider  llm.Provider
+	registry  *tools.Registry
+	workspace *core.Workspace
+	cfg       *config.Config
+}
+
+// setupEnv creates the shared provider, registry, and workspace.
+func setupEnv() (*env, error) {
 	path, err := configPath()
 	if err != nil {
 		return nil, err
@@ -217,7 +249,6 @@ func setupAgent() (*agent.Agent, error) {
 	}
 
 	checker := permission.NewChecker(false)
-
 	registry := tools.NewRegistry()
 	budget := tools.NewExecutionBudget(300 * time.Second)
 
@@ -239,13 +270,23 @@ func setupAgent() (*agent.Agent, error) {
 		return nil, fmt.Errorf("creating LLM provider: %w", err)
 	}
 
+	return &env{provider: provider, registry: registry, workspace: ws, cfg: cfg}, nil
+}
+
+// setupAgent creates a fully configured agent from the shared environment.
+func setupAgent() (*agent.Agent, error) {
+	e, err := setupEnv()
+	if err != nil {
+		return nil, err
+	}
+
 	ag := agent.New(agent.Config{
-		Provider:      provider,
-		Registry:      registry,
-		Workspace:     ws,
-		MaxTurns:      cfg.Agent.MaxTurns,
-		SizeTier:      cfg.Model.SizeTier,
-		ContextLength: cfg.Model.ContextLength,
+		Provider:      e.provider,
+		Registry:      e.registry,
+		Workspace:     e.workspace,
+		MaxTurns:      e.cfg.Agent.MaxTurns,
+		SizeTier:      e.cfg.Model.SizeTier,
+		ContextLength: e.cfg.Model.ContextLength,
 	})
 
 	return ag, nil

@@ -72,6 +72,7 @@ func (a *Agent) Run(input string) (string, error) {
 	var lastResponse string
 	var lastToolResult string
 	var prevCallKey string
+	prevCallSucceeded := true
 	repeatCount := 0
 
 	for turn := 0; turn < a.maxTurns; turn++ {
@@ -110,12 +111,13 @@ func (a *Agent) Run(input string) (string, error) {
 			return response, nil
 		}
 
-		// Repeat detection
+		// Repeat detection — only count as repeat if previous SUCCEEDED.
+		// A retry after failure is a correction attempt, not a loop.
 		callKey := fmt.Sprintf("%s:%v", toolCalls[0].Name, toolCalls[0].Arguments)
-		if callKey == prevCallKey {
+		if callKey == prevCallKey && prevCallSucceeded {
 			repeatCount++
-			if repeatCount >= 1 {
-				log.Printf("Repeat detected (turn %d), breaking loop", turn)
+			if repeatCount >= 2 { // allow up to 3 identical successful calls before breaking
+				log.Printf("Repeat detected (turn %d, %d repeats), breaking loop", turn, repeatCount)
 				if lastToolResult != "" {
 					return lastToolResult, nil
 				}
@@ -127,9 +129,11 @@ func (a *Agent) Run(input string) (string, error) {
 		prevCallKey = callKey
 
 		// Execute tool calls
+		turnSucceeded := true
 		for _, tc := range toolCalls {
 			result, err := a.registry.Execute(tc.Name, tc.Arguments)
 			if err != nil {
+				turnSucceeded = false
 				errorMsg := fmt.Sprintf("Error executing %s: %s", tc.Name, err.Error())
 				a.history = append(a.history, core.NewToolMessage(tc.Name, errorMsg, ""))
 				lastToolResult = errorMsg
@@ -146,6 +150,7 @@ func (a *Agent) Run(input string) (string, error) {
 				}
 			}
 		}
+		prevCallSucceeded = turnSucceeded
 	}
 
 	if lastToolResult != "" {

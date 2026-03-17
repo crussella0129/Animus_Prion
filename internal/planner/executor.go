@@ -3,6 +3,10 @@ package planner
 import (
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
+	"regexp"
+	"runtime"
 	"strings"
 
 	"github.com/crussella0129/Animus_Prion/internal/core"
@@ -158,6 +162,19 @@ func (e *ChunkedExecutor) ExecuteStep(step *Step, learnedContext string) StepRes
 func buildStepSystemPrompt(registry *tools.Registry) string {
 	var sb strings.Builder
 	sb.WriteString("You are executing a single step of a larger plan. Focus only on this step.\n\n")
+
+	// Platform awareness (mirrors agent's defaultSystemPrompt)
+	sb.WriteString(fmt.Sprintf("Platform: %s/%s\n", runtime.GOOS, runtime.GOARCH))
+	switch runtime.GOOS {
+	case "windows":
+		sb.WriteString("Shared libraries use .dll extension (e.g. mylib.dll). Executables use .exe.\n")
+	case "darwin":
+		sb.WriteString("Shared libraries use .dylib extension (e.g. libmylib.dylib).\n")
+	default:
+		sb.WriteString("Shared libraries use .so extension (e.g. libmylib.so).\n")
+	}
+	sb.WriteString("\n")
+
 	sb.WriteString("Available tools:\n")
 	for _, name := range registry.List() {
 		t, _ := registry.Get(name)
@@ -239,10 +256,23 @@ func (pe *PlanExecutor) Execute(task string) (PlanResult, error) {
 		}
 	}
 
+	// --- Requirements Completeness Check ---
+	// Extract expected files from the original task and verify each exists.
+	// If any are missing, inject steps to create them before verification.
+	missingResults := pe.checkCompleteness(task, steps, &learnedContext)
+	results = append(results, missingResults...)
+
 	// --- Verify-and-Repair Loop ---
-	// After all steps, detect if code was written and attempt verification.
-	// If verification fails, inject a repair step with the error output.
-	verifyResults := pe.verifyAndRepair(steps, &learnedContext)
+	// After all steps (including any completeness fills), verify compilation.
+	allSteps := make([]Step, len(steps))
+	copy(allSteps, steps)
+	// Include any steps added by completeness check
+	for _, mr := range missingResults {
+		for _, sr := range mr.Steps {
+			allSteps = append(allSteps, *sr.Step)
+		}
+	}
+	verifyResults := pe.verifyAndRepair(allSteps, &learnedContext)
 	results = append(results, verifyResults...)
 
 	// Build combined result
@@ -265,6 +295,87 @@ func (pe *PlanExecutor) Execute(task string) (PlanResult, error) {
 		Success: allSuccess,
 		Summary: summary,
 	}, nil
+}
+
+// checkCompleteness extracts expected deliverables from the task prompt,
+// checks which ones exist in the workspace, and creates steps for any missing ones.
+func (pe *PlanExecutor) checkCompleteness(task string, steps []Step, learnedContext *strings.Builder) []PlanResult {
+	expected := extractExpectedFiles(task)
+	if len(expected) == 0 {
+		return nil
+	}
+
+	var missing []string
+	for _, f := range expected {
+		path := filepath.Join(pe.workspace.CWD(), f)
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			missing = append(missing, f)
+		}
+	}
+
+	if len(missing) == 0 {
+		log.Printf("Completeness check passed: all %d expected files exist", len(expected))
+		return nil
+	}
+
+	log.Printf("Completeness check: %d/%d files missing: %v", len(missing), len(expected), missing)
+	learnedContext.WriteString(fmt.Sprintf("\nMissing files that were requested: %s\n", strings.Join(missing, ", ")))
+
+	var results []PlanResult
+	// Create a single step to write all missing files
+	missingDesc := fmt.Sprintf("Create the missing files: %s", strings.Join(missing, ", "))
+	fillStep := Step{
+		Number:      len(steps) + 1,
+		Description: missingDesc,
+		Type:        StepWrite,
+		Status:      StatusPending,
+	}
+
+	fillResult := pe.executor.ExecuteStep(&fillStep, learnedContext.String()+
+		fmt.Sprintf("\nThe following files were requested but not yet created: %s\n"+
+			"Original task: %s\n"+
+			"Create these missing files now, using the context from previous steps.\n",
+			strings.Join(missing, ", "), truncate(task, 500)))
+
+	results = append(results, PlanResult{
+		Steps:   []StepResult{fillResult},
+		Success: fillResult.Error == nil,
+	})
+
+	if fillResult.Output != "" {
+		learnedContext.WriteString(fmt.Sprintf("Fill step result: %s\n", truncate(fillResult.Output, 500)))
+	}
+
+	return results
+}
+
+// extractExpectedFiles pulls file names and paths from a task description.
+// Uses regex patterns to find explicit file references in natural language.
+// This is deterministic (no LLM call), fast, and catches the common patterns.
+func extractExpectedFiles(task string) []string {
+	var files []string
+	seen := make(map[string]bool)
+
+	// Pattern 1: Explicit file paths with extensions
+	// Matches: main.py, src/lib.rs, Cargo.toml, handler.go, etc.
+	filePattern := regexp.MustCompile(`(?i)\b((?:[\w./\\-]+/)?[\w-]+\.(?:py|rs|go|js|ts|toml|yaml|yml|json|c|cpp|h|java|rb|sh))\b`)
+	for _, m := range filePattern.FindAllString(task, -1) {
+		m = strings.TrimSpace(m)
+		if !seen[m] {
+			seen[m] = true
+			files = append(files, m)
+		}
+	}
+
+	// Pattern 2: Cargo.toml implied by "Rust library" or "cdylib"
+	if !seen["Cargo.toml"] {
+		if regexp.MustCompile(`(?i)cargo\.toml|cargo|cdylib|rust\s+library`).MatchString(task) {
+			files = append(files, "Cargo.toml")
+			seen["Cargo.toml"] = true
+		}
+	}
+
+	return files
 }
 
 // verifyAndRepair checks if code was written and runs verification commands.
@@ -330,13 +441,15 @@ func (pe *PlanExecutor) verifyAndRepair(steps []Step, learnedContext *strings.Bu
 	return results
 }
 
-// detectVerifyCommand looks at what steps wrote and returns an appropriate verify command.
-// Returns "" if no verification is applicable.
+// detectVerifyCommand determines what verification to run.
+// Uses TWO strategies: step description keywords AND filesystem probing.
+// Filesystem probing catches cases where the agent loop (not planner) wrote files.
 func detectVerifyCommand(steps []Step, cwd string) string {
 	wroteRust := false
 	wrotePython := false
 	wroteGo := false
 
+	// Strategy 1: Step description keywords
 	for _, s := range steps {
 		lower := strings.ToLower(s.Description)
 		if s.Type == StepWrite || strings.Contains(lower, "write") || strings.Contains(lower, "create") {
@@ -352,7 +465,26 @@ func detectVerifyCommand(steps []Step, cwd string) string {
 		}
 	}
 
-	// Build verification command based on what was written
+	// Strategy 2: Filesystem probing — check what actually exists
+	if !wroteRust {
+		if _, err := os.Stat(filepath.Join(cwd, "Cargo.toml")); err == nil {
+			wroteRust = true
+		}
+	}
+	if !wroteGo {
+		if _, err := os.Stat(filepath.Join(cwd, "go.mod")); err == nil {
+			wroteGo = true
+		}
+	}
+	if !wrotePython {
+		// Check for any .py file
+		matches, _ := filepath.Glob(filepath.Join(cwd, "*.py"))
+		if len(matches) > 0 {
+			wrotePython = true
+		}
+	}
+
+	// Build verification command based on what was detected
 	switch {
 	case wroteRust && wrotePython:
 		return "cargo build"

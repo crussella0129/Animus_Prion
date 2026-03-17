@@ -9,21 +9,14 @@
 - `[BLOCKED: reason]` — Cannot proceed
 - `[DECISION: topic]` — Awaiting human input
 
-## Current Sprint
+## Current Sprint — Post-Benchmark Fixes
 
-- [x] Phase 0: Project scaffold — Go module, directory structure, GECK init
-- [x] Phase 1: Core packages — config, workspace, permissions, errors, context, message, toolparse
-- [x] Phase 2: Tool framework — registry, shell, filesystem, git tools
-- [x] Phase 3: LLM provider abstraction — provider interface, OpenAI/Anthropic API clients, factory
-- [x] Phase 4: Agent loop — agentic loop with tool calling, reflection, repeat detection
-- [x] Phase 5: Planner — parser, decomposer, executor with scope enforcement
-- [x] Phase 6: CLI — cobra-based CLI with chat REPL, run, config commands
-- [x] Phase 7: Tool tests — filesystem, shell, execution budget (16 tests)
-- [x] Phase 8: Manifold retrieval — router (hardcoded classification), executor (RRF fusion)
-- [x] Phase 9: Knowledge graph — Go AST parsing, SQLite graph DB, incremental indexer
-- [x] Phase 10: Vector store — SQLite-backed embedding storage with KNN search
-- [x] Phase 11: Wire retrieval + knowledge graph into agent as ManifoldSearchTool
-- [x] Phase 12: README.md with usage documentation
+- [ ] FIX-1: Route `prion run` through PlanExecutor for complex tasks (ROOT CAUSE of missing main.py)
+- [ ] FIX-2: Smarter repeat detection — allow retries after failures, increase threshold
+- [ ] FIX-3: Filesystem-based verification detection (check for Cargo.toml/go.mod/\*.py, not just step descriptions)
+- [ ] FIX-4: Requirements completeness check — extract expected files from prompt, verify they exist
+- [ ] FIX-5: Improve tool call parser for nested JSON arguments (brace-counting fallback)
+- [ ] FIX-6: Add platform info to planner's per-step system prompt
 
 ## Backlog
 
@@ -34,10 +27,11 @@
 - [ ] Streaming support for API providers
 - [ ] Session persistence and transcript recording
 - [ ] Integration test with real LLM (gauntlet)
-- [ ] Embedding provider implementation (OpenAI text-embedding-3-small)
+- [ ] Embedding provider implementation
 
 ## Completed (Recent)
 
 - [x] Phase 0-6 complete — Entry #1
 - [x] Phase 7-9 complete — Entry #2
 - [x] Phase 10-12 complete — Entry #3
+- [x] Self-correction (platform prompt, verify loop, robust shell) — Entry #4 (benchmark)

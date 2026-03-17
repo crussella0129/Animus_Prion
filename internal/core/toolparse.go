@@ -52,7 +52,7 @@ func ParseToolCalls(text string) []ToolCall {
 		}
 	}
 
-	// Strategy 3: Inline JSON
+	// Strategy 3: Inline JSON (regex — may miss nested braces)
 	inlineMatches := inlineJSONPattern.FindAllString(text, -1)
 	if len(inlineMatches) > 0 {
 		var calls []ToolCall
@@ -67,7 +67,90 @@ func ParseToolCalls(text string) []ToolCall {
 		}
 	}
 
+	// Strategy 4: Brace-counting extraction for nested JSON the regex missed
+	extracted := extractBalancedJSON(text)
+	if len(extracted) > 0 {
+		var calls []ToolCall
+		for _, obj := range extracted {
+			var tc ToolCall
+			if err := json.Unmarshal([]byte(obj), &tc); err == nil && tc.Name != "" {
+				calls = append(calls, tc)
+			}
+		}
+		if len(calls) > 0 {
+			return calls
+		}
+	}
+
 	return nil
+}
+
+// extractBalancedJSON finds JSON objects with "name" key using brace counting.
+// Handles nested braces that the regex strategies miss.
+func extractBalancedJSON(text string) []string {
+	var results []string
+	i := 0
+	for i < len(text) {
+		// Find potential JSON start
+		idx := strings.Index(text[i:], `{"name"`)
+		if idx == -1 {
+			// Also try with spaces: { "name"
+			idx = strings.Index(text[i:], `{ "name"`)
+			if idx == -1 {
+				break
+			}
+		}
+		start := i + idx
+
+		// Count braces to find the matching close
+		depth := 0
+		inString := false
+		escaped := false
+		end := -1
+
+		for j := start; j < len(text); j++ {
+			ch := text[j]
+			if escaped {
+				escaped = false
+				continue
+			}
+			if ch == '\\' && inString {
+				escaped = true
+				continue
+			}
+			if ch == '"' {
+				inString = !inString
+				continue
+			}
+			if inString {
+				continue
+			}
+			if ch == '{' {
+				depth++
+			} else if ch == '}' {
+				depth--
+				if depth == 0 {
+					end = j + 1
+					break
+				}
+			}
+		}
+
+		if end > start {
+			candidate := text[start:end]
+			// Quick validation: does it parse as JSON?
+			var raw map[string]interface{}
+			if json.Unmarshal([]byte(candidate), &raw) == nil {
+				if _, hasName := raw["name"]; hasName {
+					results = append(results, candidate)
+				}
+			}
+			i = end
+		} else {
+			i = start + 1
+		}
+	}
+	return results
 }
 
 // DeduplicateToolCalls removes duplicate tool calls within a single response.
