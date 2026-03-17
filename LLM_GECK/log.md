@@ -178,5 +178,59 @@ None
 
 ### Next
 - CI/CD with GitHub Actions
-- Embedding provider implementation (OpenAI text-embedding-3-small)
+- Embedding provider implementation
 - Integration test with real LLM
+
+---
+
+## Entry #4 — 2026-03-17
+
+### Summary
+Benchmarked Animus vs Prion (2 rounds), implemented self-correction (platform prompt, verify loop, robust shell), then analyzed benchmark results and implemented 6 targeted fixes addressing every failure mode.
+
+### Actions
+- Round 1 benchmark: Prion 7.25 vs Animus 5.85 (Prion Rust compiles, Animus #![no_std] error)
+- Implemented self-correction v1: platform prompt, verify-and-repair loop, robust shell tool
+- Round 2 benchmark: Prion 7.70 vs Animus 4.80 (Prion auto-compiled Rust, 79s vs 117s)
+- Analyzed all 4 experiment runs, traced 6 root causes to source code
+- FIX-1: Route `prion run` through PlanExecutor for complex tasks
+- FIX-2: Smarter repeat detection (only count repeats on success, threshold 1→2)
+- FIX-3: Filesystem-based verify detection (probe Cargo.toml/go.mod/*.py)
+- FIX-4: Requirements completeness check (extract expected files from prompt, verify existence)
+- FIX-5: Brace-counting JSON parser fallback for nested tool calls
+- FIX-6: Platform info in planner per-step prompt
+
+### Files Changed
+- `cmd/prion/main.go` — setupEnv refactor, planner routing for complex tasks
+- `internal/agent/agent.go` — platform prompt, smarter repeat detection
+- `internal/tools/shell.go` — robust arg handling (string/array/object/any)
+- `internal/planner/executor.go` — verify loop, completeness check, filesystem probing, platform prompt
+- `internal/core/toolparse.go` — brace-counting JSON extractor (Strategy 4)
+- `internal/planner/executor_test.go` — filesystem probing, extractExpectedFiles tests
+- `internal/core/toolparse_test.go` — nested JSON, balanced extraction tests
+- `LLM_GECK/Archival Assets/Benchmark_Animus_vs_Prion_2026-03-17.md` — 2-round comparison
+
+### Commits
+- `a665ef9` — refactor: rename OpenAI to LocalProvider
+- `1cdf890` — docs: Round 1 benchmark
+- `c614503` — feat: self-correction v1
+- `4a7174c` — docs: Round 2 benchmark
+- `7c777dd` — feat: 6 post-benchmark fixes
+
+### Findings
+- Prion auto-compiled Rust via verify loop — first self-verifying behavior across both agents
+- Speed flipped: Prion 79s vs Animus 117s (57% faster than Prion R1)
+- Root cause of missing main.py: `prion run` bypassed the planner entirely
+- 7B models are stochastic: Animus fixed #![no_std] in R2 but introduced a Python syntax error
+- Filesystem probing is more reliable than step-description keyword matching
+
+### Issues
+None blocking. Known: `containsError()` may false-positive on strings containing "error" in variable names.
+
+### Checkpoint
+**Status:** CONTINUE — All 6 benchmark-identified issues fixed. 97 tests passing.
+
+### Next
+- Round 3 benchmark to validate all 6 fixes
+- CI/CD with GitHub Actions
+- Embedding provider implementation
