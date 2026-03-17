@@ -4,6 +4,7 @@ package agent
 import (
 	"fmt"
 	"log"
+	"runtime"
 	"strings"
 	"time"
 
@@ -202,8 +203,20 @@ func evaluateToolResult(toolName, result string, err error) string {
 func defaultSystemPrompt(registry *tools.Registry) string {
 	var sb strings.Builder
 	sb.WriteString("You are Prion, a local-first AI agent. You help users by executing tasks using available tools.\n\n")
-	sb.WriteString("Available tools:\n")
 
+	// Platform awareness — prevents .so/.dll/.dylib mistakes
+	sb.WriteString(fmt.Sprintf("Platform: %s/%s\n", runtime.GOOS, runtime.GOARCH))
+	switch runtime.GOOS {
+	case "windows":
+		sb.WriteString("Shared libraries use .dll extension. Executables use .exe.\n")
+	case "darwin":
+		sb.WriteString("Shared libraries use .dylib extension.\n")
+	default:
+		sb.WriteString("Shared libraries use .so extension.\n")
+	}
+	sb.WriteString("\n")
+
+	sb.WriteString("Available tools:\n")
 	for _, name := range registry.List() {
 		t, _ := registry.Get(name)
 		sb.WriteString(fmt.Sprintf("- %s: %s\n", name, t.Description()))
@@ -212,6 +225,8 @@ func defaultSystemPrompt(registry *tools.Registry) string {
 	sb.WriteString("\nTo use a tool, respond with a JSON object: {\"name\": \"tool_name\", \"arguments\": {...}}\n")
 	sb.WriteString("You may ONLY use the tools listed above. Do not invent tools.\n")
 	sb.WriteString("When you have completed the task, respond with plain text (no JSON).\n")
+	sb.WriteString("\nIMPORTANT: After writing code files, ALWAYS verify your work by running the compiler or interpreter ")
+	sb.WriteString("(e.g. run_shell with 'cargo build' or 'python script.py'). If it fails, read the error and fix it.\n")
 
 	return sb.String()
 }

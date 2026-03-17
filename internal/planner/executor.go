@@ -239,6 +239,12 @@ func (pe *PlanExecutor) Execute(task string) (PlanResult, error) {
 		}
 	}
 
+	// --- Verify-and-Repair Loop ---
+	// After all steps, detect if code was written and attempt verification.
+	// If verification fails, inject a repair step with the error output.
+	verifyResults := pe.verifyAndRepair(steps, &learnedContext)
+	results = append(results, verifyResults...)
+
 	// Build combined result
 	var allResults []StepResult
 	for _, r := range results {
@@ -259,6 +265,129 @@ func (pe *PlanExecutor) Execute(task string) (PlanResult, error) {
 		Success: allSuccess,
 		Summary: summary,
 	}, nil
+}
+
+// verifyAndRepair checks if code was written and runs verification commands.
+// If verification fails, it creates a repair step with the error output.
+// Returns additional PlanResults from verify/repair steps.
+func (pe *PlanExecutor) verifyAndRepair(steps []Step, learnedContext *strings.Builder) []PlanResult {
+	var results []PlanResult
+
+	// Detect what was written by looking at step types and descriptions
+	verifyCmd := detectVerifyCommand(steps, pe.workspace.CWD())
+	if verifyCmd == "" {
+		return nil // nothing to verify
+	}
+
+	log.Printf("Auto-verify: running '%s'", verifyCmd)
+
+	// Run the verification command directly via the tool registry
+	verifyStep := Step{
+		Number:      len(steps) + 1,
+		Description: fmt.Sprintf("Verify: %s", verifyCmd),
+		Type:        StepShell,
+		Status:      StatusPending,
+	}
+
+	verifyResult := pe.executor.ExecuteStep(&verifyStep, learnedContext.String()+
+		fmt.Sprintf("\nRun this command to verify the code: %s\nIf it fails, do NOT fix anything — just report the error.\n", verifyCmd))
+
+	results = append(results, PlanResult{
+		Steps:   []StepResult{verifyResult},
+		Success: verifyResult.Error == nil,
+	})
+
+	// Check if verification failed
+	if verifyResult.Error != nil || containsError(verifyResult.Output) {
+		errorOutput := verifyResult.Output
+		if verifyResult.Error != nil {
+			errorOutput = verifyResult.Error.Error()
+		}
+
+		log.Printf("Verification failed, running repair step")
+		learnedContext.WriteString(fmt.Sprintf("\nVerification FAILED:\n%s\n", truncate(errorOutput, 1000)))
+
+		// Repair step: give the model the error and ask it to fix
+		repairStep := Step{
+			Number:      len(steps) + 2,
+			Description: "Fix the errors found during verification",
+			Type:        StepWrite,
+			Status:      StatusPending,
+		}
+
+		repairResult := pe.executor.ExecuteStep(&repairStep, learnedContext.String()+
+			"\nThe code failed verification. Read the error above and fix the source files. "+
+			"Then re-run the verification command to confirm the fix.\n")
+
+		results = append(results, PlanResult{
+			Steps:   []StepResult{repairResult},
+			Success: repairResult.Error == nil,
+		})
+	} else {
+		log.Printf("Verification passed")
+	}
+
+	return results
+}
+
+// detectVerifyCommand looks at what steps wrote and returns an appropriate verify command.
+// Returns "" if no verification is applicable.
+func detectVerifyCommand(steps []Step, cwd string) string {
+	wroteRust := false
+	wrotePython := false
+	wroteGo := false
+
+	for _, s := range steps {
+		lower := strings.ToLower(s.Description)
+		if s.Type == StepWrite || strings.Contains(lower, "write") || strings.Contains(lower, "create") {
+			if strings.Contains(lower, ".rs") || strings.Contains(lower, "cargo") || strings.Contains(lower, "rust") {
+				wroteRust = true
+			}
+			if strings.Contains(lower, ".py") || strings.Contains(lower, "python") {
+				wrotePython = true
+			}
+			if strings.Contains(lower, ".go") || strings.Contains(lower, "golang") {
+				wroteGo = true
+			}
+		}
+	}
+
+	// Build verification command based on what was written
+	switch {
+	case wroteRust && wrotePython:
+		return "cargo build"
+	case wroteRust:
+		return "cargo build"
+	case wroteGo:
+		return "go build ./..."
+	case wrotePython:
+		return "python -m py_compile main.py"
+	default:
+		return ""
+	}
+}
+
+// containsError checks if command output contains error indicators.
+func containsError(output string) bool {
+	lower := strings.ToLower(output)
+	indicators := []string{
+		"error",
+		"failed",
+		"traceback",
+		"syntaxerror",
+		"compileerror",
+		"could not compile",
+		"cannot find",
+		"no such file",
+		"undefined",
+		"unresolved",
+	}
+	for _, ind := range indicators {
+		if strings.Contains(lower, ind) {
+			return true
+		}
+	}
+	return false
 }
 
 func truncate(s string, maxLen int) string {

@@ -81,9 +81,33 @@ func (t *ShellTool) Parameters() ParameterSchema {
 }
 
 func (t *ShellTool) Execute(args map[string]interface{}) (string, error) {
-	command, ok := args["command"].(string)
-	if !ok {
-		return "", fmt.Errorf("command must be a string")
+	// Robust command extraction — LLMs sometimes pass non-string types
+	var command string
+	switch v := args["command"].(type) {
+	case string:
+		command = v
+	case []interface{}:
+		// Model passed an array like ["cargo", "build"] — join it
+		parts := make([]string, len(v))
+		for i, p := range v {
+			parts[i] = fmt.Sprintf("%v", p)
+		}
+		command = strings.Join(parts, " ")
+	case map[string]interface{}:
+		// Model passed an object — try to extract a "command" or "cmd" field
+		if cmd, ok := v["command"].(string); ok {
+			command = cmd
+		} else if cmd, ok := v["cmd"].(string); ok {
+			command = cmd
+		} else {
+			return "", fmt.Errorf("command must be a string, got nested object: %v", v)
+		}
+	default:
+		if args["command"] != nil {
+			command = fmt.Sprintf("%v", args["command"])
+		} else {
+			return "", fmt.Errorf("command must be a string, got %T", args["command"])
+		}
 	}
 
 	timeout := 30
