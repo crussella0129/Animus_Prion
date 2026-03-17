@@ -1,0 +1,35 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/prion
+
+# Test binary
+*.test
+
+# Output
+*.out
+*.log
+
+# Go workspace
+go.work
+go.work.sum
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Config (may contain API keys)
+.animus_prion/
+
+# Build output
+dist/
+bin/
