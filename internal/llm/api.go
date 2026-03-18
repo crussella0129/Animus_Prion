@@ -49,11 +49,11 @@ func NewLocalProvider(cfg LocalProviderConfig) *LocalProvider {
 		baseURL: cfg.BaseURL,
 		apiKey:  cfg.APIKey,
 		model:   cfg.Model,
-		client:  &http.Client{Timeout: 120 * time.Second},
+		client:  &http.Client{Timeout: 300 * time.Second}, // 5 min — 14B models need longer
 		caps: ModelCapabilities{
 			ContextLength: cfg.ContextLength,
 			SizeTier:      cfg.SizeTier,
-			SupportsTools: false, // most local models don't support native tool calling
+			SupportsTools: false,
 			SupportsJSON:  false,
 		},
 	}
