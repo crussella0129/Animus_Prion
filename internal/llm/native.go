@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -18,10 +19,12 @@ import (
 // to a LocalProvider speaking the OpenAI-compatible protocol over localhost.
 // This keeps the build pure Go (no CGo) while providing "just works" local inference.
 type NativeProvider struct {
-	process  *exec.Cmd
-	inner    *LocalProvider // reuses existing HTTP client for Generate()
-	port     int
-	caps     ModelCapabilities
+	process      *exec.Cmd
+	inner        *LocalProvider
+	port         int
+	caps         ModelCapabilities
+	shutdownOnce sync.Once
+	shutdownErr  error
 }
 
 // NativeProviderConfig configures the native provider.
@@ -143,28 +146,32 @@ func (p *NativeProvider) Capabilities() ModelCapabilities {
 }
 
 // Shutdown gracefully stops the llama-server process.
+// Idempotent — safe to call multiple times (deferred + explicit).
 func (p *NativeProvider) Shutdown() error {
-	if p.process == nil || p.process.Process == nil {
-		return nil
-	}
-
-	// Single Wait goroutine — avoids double-Wait race
-	done := make(chan error, 1)
-	go func() { done <- p.process.Wait() }()
-
-	if runtime.GOOS == "windows" {
-		p.process.Process.Kill()
-	} else {
-		p.process.Process.Signal(os.Interrupt)
-		select {
-		case err := <-done:
-			return err // graceful shutdown succeeded
-		case <-time.After(5 * time.Second):
-			p.process.Process.Kill()
+	p.shutdownOnce.Do(func() {
+		if p.process == nil || p.process.Process == nil {
+			return
 		}
-	}
 
-	return <-done // wait for process to fully exit after kill
+		done := make(chan error, 1)
+		go func() { done <- p.process.Wait() }()
+
+		if runtime.GOOS == "windows" {
+			p.process.Process.Kill()
+		} else {
+			p.process.Process.Signal(os.Interrupt)
+			select {
+			case err := <-done:
+				p.shutdownErr = err
+				return
+			case <-time.After(5 * time.Second):
+				p.process.Process.Kill()
+			}
+		}
+
+		p.shutdownErr = <-done
+	})
+	return p.shutdownErr
 }
 
 // Port returns the port the managed server is listening on.
