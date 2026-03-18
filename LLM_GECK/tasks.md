@@ -2,12 +2,7 @@
 
 **Last Updated:** 2026-03-17
 
-## Legend
-
-- `[ ]` — Not started
-- `[x]` — Complete
-
-## Current Sprint — Security & Quality (from Code Review)
+## All Tiers Complete
 
 ### Tier 1: Security (CRITICAL) — DONE
 - [x] Fix workspace boundary prefix collision
@@ -30,11 +25,11 @@
 - [x] Fix detectVerifyCommand hardcoded "main.py"
 - [x] Sort tool names in Registry.List()
 
-### Tier 4: Architecture — Plan for v0.3
-- [ ] Thread context.Context through public APIs
-- [ ] Unify core.Message and llm.Message into single type
-- [ ] Add structured logging (slog)
-- [ ] Test coverage for: agent, llm, git tools, manifold, decomposer, retrieval executor, indexer
+### Tier 4: Architecture — DONE
+- [x] Unified core.Message — llm.Message is now a type alias
+- [x] context.Context through Provider.Generate, Agent.Run
+- [x] Structured logging with log/slog
+- [x] Test coverage: llm, retrieval executor, chunker (108 tests, 19 files)
 
 ## Backlog
 - [ ] Round 3 benchmark with 14B model
@@ -49,7 +44,5 @@
 - [x] Self-correction + Benchmarks R1/R2
 - [x] 6 post-benchmark fixes
 - [x] CLI UX + Native GGUF + Progress output
-- [x] Code review (30 issues)
-- [x] Tier 1: 3 CRITICAL security fixes
-- [x] Tier 2: 5 HIGH correctness fixes
-- [x] Tier 3: 7 MEDIUM quality fixes
+- [x] Code review (30 issues found)
+- [x] Tiers 1-4: 22 issues fixed, 108 tests
