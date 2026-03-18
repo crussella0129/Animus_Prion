@@ -6,9 +6,7 @@ import (
 	"bufio"
 	"fmt"
 	"math/rand"
-	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -27,7 +25,7 @@ import (
 var (
 	cfgFile   string
 	workspace string
-	version   = "0.1.0"
+	version   = "0.2.0"
 )
 
 var greetings = []string{
@@ -49,10 +47,10 @@ func randomGreeting() string {
 
 func printBanner() {
 	fmt.Println()
-	fmt.Println("  ╔═══════════════════════════════════════╗")
-	fmt.Println("  ║       ANIMUS PRION  ·  Activated      ║")
-	fmt.Printf("  ║  v%-6s  %s/%-6s  Qwen 7B  ║\n", version, runtime.GOOS, runtime.GOARCH)
-	fmt.Println("  ╚═══════════════════════════════════════╝")
+	fmt.Println("  +=========================================+")
+	fmt.Println("  |       ANIMUS PRION  ·  Activated        |")
+	fmt.Printf("  |  v%-6s  %s/%-6s              |\n", version, runtime.GOOS, runtime.GOARCH)
+	fmt.Println("  +=========================================+")
 	fmt.Println()
 	fmt.Printf("  %s\n\n", randomGreeting())
 }
@@ -62,7 +60,6 @@ func main() {
 		Use:   "prion",
 		Short: "Prion — local-first LLM agent",
 		Long:  "Prion is a local-first LLM agent with plan-then-execute architecture, built for lightning speed.",
-		// Default action: launch interactive mode
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return interactiveSession()
 		},
@@ -81,130 +78,30 @@ func main() {
 	}
 }
 
-// ensureServer checks if llama-server is reachable; if not, tries to start it.
-func ensureServer() error {
-	cfg, err := config.Load(mustConfigPath())
-	if err != nil {
-		return nil // non-fatal, will fail later on generate
-	}
-
-	baseURL := cfg.Model.BaseURL
-	if baseURL == "" {
-		baseURL = "http://127.0.0.1:8090/v1"
-	}
-
-	// Strip /v1 to get health endpoint
-	healthURL := strings.TrimSuffix(baseURL, "/v1") + "/health"
-
-	client := &http.Client{Timeout: 2 * time.Second}
-	resp, err := client.Get(healthURL)
-	if err == nil {
-		resp.Body.Close()
-		if resp.StatusCode == 200 {
-			return nil // server is already running
-		}
-	}
-
-	// Server not running — try to start it
-	fmt.Println("  Starting llama-server...")
-
-	modelPath := cfg.Model.ModelName
-	// Check common model locations
-	candidates := []string{
-		filepath.Join(os.Getenv("USERPROFILE"), ".animus", "models", modelPath),
-		filepath.Join(os.Getenv("HOME"), ".animus", "models", modelPath),
-		modelPath, // absolute path
-	}
-
-	var foundModel string
-	for _, c := range candidates {
-		if _, err := os.Stat(c); err == nil {
-			foundModel = c
-			break
-		}
-	}
-
-	if foundModel == "" {
-		return fmt.Errorf("model not found: %s\n  Start llama-server manually:\n  llama-server --model <path-to-gguf> --port 8090", modelPath)
-	}
-
-	serverBin := findLlamaServer()
-	if serverBin == "" {
-		return fmt.Errorf("llama-server not found.\n  Start it manually:\n  llama-server --model %s --port 8090", foundModel)
-	}
-
-	// Start server in background
-	cmd := exec.Command(serverBin,
-		"--model", foundModel,
-		"--ctx-size", "4096",
-		"--n-gpu-layers", "-1",
-		"--port", "8090",
-		"--host", "127.0.0.1",
-	)
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start llama-server: %w", err)
-	}
-
-	// Wait for it to become healthy
-	for i := 0; i < 30; i++ {
-		time.Sleep(1 * time.Second)
-		resp, err := client.Get(healthURL)
-		if err == nil {
-			resp.Body.Close()
-			if resp.StatusCode == 200 {
-				fmt.Println("  llama-server ready.")
-				return nil
-			}
-		}
-	}
-
-	return fmt.Errorf("llama-server started but didn't become healthy within 30s")
-}
-
-func findLlamaServer() string {
-	// Check common locations
-	candidates := []string{
-		filepath.Join(os.Getenv("USERPROFILE"), ".animus", "bin", "llama-server.exe"),
-		filepath.Join(os.Getenv("HOME"), ".animus", "bin", "llama-server.exe"),
-		filepath.Join(os.Getenv("USERPROFILE"), ".animus", "bin", "llama-server"),
-	}
-	for _, c := range candidates {
-		if _, err := os.Stat(c); err == nil {
-			return c
-		}
-	}
-	// Check PATH
-	if p, err := exec.LookPath("llama-server"); err == nil {
-		return p
-	}
-	return ""
-}
-
-func mustConfigPath() string {
-	p, _ := configPath()
-	return p
-}
-
 // interactiveSession is the main entry point — banner + REPL.
 func interactiveSession() error {
 	printBanner()
 
-	if err := ensureServer(); err != nil {
-		fmt.Fprintf(os.Stderr, "  Warning: %v\n\n", err)
-	}
-
-	ag, err := setupAgent()
+	e, err := setupEnv()
 	if err != nil {
 		return fmt.Errorf("setup failed: %w", err)
 	}
+	// Ensure managed providers are shut down on exit
+	defer shutdownProvider(e.provider)
+
+	ag := agent.New(agent.Config{
+		Provider:      e.provider,
+		Registry:      e.registry,
+		Workspace:     e.workspace,
+		MaxTurns:      e.cfg.Agent.MaxTurns,
+		SizeTier:      e.cfg.Model.SizeTier,
+		ContextLength: e.cfg.Model.ContextLength,
+	})
 
 	fmt.Println("  Type your task, or /help for commands, /quit to exit.")
 	fmt.Println()
 
 	scanner := bufio.NewScanner(os.Stdin)
-	// Allow long inputs (default is 64KB which is fine, but be explicit)
 	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
 
 	for {
@@ -218,7 +115,6 @@ func interactiveSession() error {
 			continue
 		}
 
-		// Slash commands
 		if strings.HasPrefix(input, "/") {
 			if input == "/quit" || input == "/exit" {
 				fmt.Println("Shutting down. Until next time.")
@@ -231,20 +127,14 @@ func interactiveSession() error {
 
 		start := time.Now()
 
-		// Route: complex tasks → planner, simple → agent
 		var response string
 		if planner.IsSimpleTask(input) {
 			response, err = ag.Run(input)
 		} else {
-			e, envErr := setupEnv()
-			if envErr != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", envErr)
-				continue
-			}
 			pe := planner.NewPlanExecutor(e.provider, e.registry, e.workspace)
 			result, planErr := pe.Execute(input)
 			if planErr != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", planErr)
+				fmt.Fprintf(os.Stderr, "Error: %v\n\n", planErr)
 				continue
 			}
 			response = result.Summary
@@ -277,23 +167,27 @@ func runCmd() *cobra.Command {
 		Use:   "run [task]",
 		Short: "Execute a task (or start interactive mode with no args)",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// No args → interactive mode
 			if len(args) == 0 {
 				return interactiveSession()
 			}
 
 			task := strings.Join(args, " ")
 
-			if err := ensureServer(); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+			e, err := setupEnv()
+			if err != nil {
+				return err
 			}
+			defer shutdownProvider(e.provider)
 
-			// Simple tasks → agent loop (fast path)
 			if planner.IsSimpleTask(task) {
-				ag, err := setupAgent()
-				if err != nil {
-					return err
-				}
+				ag := agent.New(agent.Config{
+					Provider:      e.provider,
+					Registry:      e.registry,
+					Workspace:     e.workspace,
+					MaxTurns:      e.cfg.Agent.MaxTurns,
+					SizeTier:      e.cfg.Model.SizeTier,
+					ContextLength: e.cfg.Model.ContextLength,
+				})
 				response, err := ag.Run(task)
 				if err != nil {
 					return err
@@ -302,17 +196,11 @@ func runCmd() *cobra.Command {
 				return nil
 			}
 
-			// Complex tasks → plan-then-execute
-			e, err := setupEnv()
-			if err != nil {
-				return err
-			}
 			pe := planner.NewPlanExecutor(e.provider, e.registry, e.workspace)
 			result, err := pe.Execute(task)
 			if err != nil {
 				return err
 			}
-
 			if result.Summary != "" {
 				fmt.Println(result.Summary)
 			}
@@ -324,7 +212,6 @@ func runCmd() *cobra.Command {
 	}
 }
 
-// versionCmd prints the version.
 func versionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
@@ -335,13 +222,11 @@ func versionCmd() *cobra.Command {
 	}
 }
 
-// configCmd manages configuration.
 func configCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
 		Short: "Manage configuration",
 	}
-
 	cmd.AddCommand(&cobra.Command{
 		Use:   "init",
 		Short: "Create default configuration file",
@@ -358,7 +243,6 @@ func configCmd() *cobra.Command {
 			return nil
 		},
 	})
-
 	cmd.AddCommand(&cobra.Command{
 		Use:   "show",
 		Short: "Show current configuration",
@@ -379,11 +263,11 @@ func configCmd() *cobra.Command {
 			return nil
 		},
 	})
-
 	return cmd
 }
 
-// env holds the shared components needed by both the agent and planner.
+// --- Environment setup ---
+
 type env struct {
 	provider  llm.Provider
 	registry  *tools.Registry
@@ -391,7 +275,6 @@ type env struct {
 	cfg       *config.Config
 }
 
-// setupEnv creates the shared provider, registry, and workspace.
 func setupEnv() (*env, error) {
 	path, err := configPath()
 	if err != nil {
@@ -433,31 +316,22 @@ func setupEnv() (*env, error) {
 	registry.Register(tools.NewGitBranchTool(ws))
 	registry.Register(tools.NewGitCheckoutTool(ws))
 
+	fmt.Println("  Loading model...")
 	provider, err := llm.NewProvider(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("creating LLM provider: %w", err)
+		return nil, fmt.Errorf("creating provider: %w", err)
 	}
+	fmt.Println("  Model ready.")
+	fmt.Println()
 
 	return &env{provider: provider, registry: registry, workspace: ws, cfg: cfg}, nil
 }
 
-// setupAgent creates a fully configured agent from the shared environment.
-func setupAgent() (*agent.Agent, error) {
-	e, err := setupEnv()
-	if err != nil {
-		return nil, err
+// shutdownProvider cleans up managed providers (kills llama-server subprocess).
+func shutdownProvider(p llm.Provider) {
+	if s, ok := p.(llm.Shutdowner); ok {
+		s.Shutdown()
 	}
-
-	ag := agent.New(agent.Config{
-		Provider:      e.provider,
-		Registry:      e.registry,
-		Workspace:     e.workspace,
-		MaxTurns:      e.cfg.Agent.MaxTurns,
-		SizeTier:      e.cfg.Model.SizeTier,
-		ContextLength: e.cfg.Model.ContextLength,
-	})
-
-	return ag, nil
 }
 
 func configPath() (string, error) {
@@ -471,7 +345,6 @@ func configPath() (string, error) {
 	return filepath.Join(dir, "config.yaml"), nil
 }
 
-// handleSlashCommand processes in-session commands.
 func handleSlashCommand(input string, ag *agent.Agent) bool {
 	switch {
 	case input == "/help":

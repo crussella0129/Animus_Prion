@@ -8,8 +8,8 @@ import (
 
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
-	if cfg.Model.Provider != "local" {
-		t.Errorf("expected default provider 'local', got '%s'", cfg.Model.Provider)
+	if cfg.Model.Provider != "native" {
+		t.Errorf("expected default provider 'native', got '%s'", cfg.Model.Provider)
 	}
 	if cfg.Agent.MaxTurns != 20 {
 		t.Errorf("expected max_turns 20, got %d", cfg.Agent.MaxTurns)
@@ -49,7 +49,7 @@ func TestLoadNonexistent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load should not error on missing file: %v", err)
 	}
-	if cfg.Model.Provider != "local" {
+	if cfg.Model.Provider != "native" {
 		t.Errorf("expected default provider on missing file")
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -59,11 +60,10 @@ func NewLocalProvider(cfg LocalProviderConfig) *LocalProvider {
 }
 
 func (p *LocalProvider) Available() bool {
-	// Check if the server is reachable
-	resp, err := p.client.Get(p.baseURL + "/../health")
+	healthURL := strings.TrimSuffix(p.baseURL, "/v1") + "/health"
+	resp, err := p.client.Get(healthURL)
 	if err != nil {
-		// Fall back: assume available if configured
-		return p.baseURL != ""
+		return false // server is not reachable
 	}
 	defer resp.Body.Close()
 	return resp.StatusCode == 200

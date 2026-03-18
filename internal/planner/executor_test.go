@@ -103,24 +103,33 @@ func TestDetectVerifyCommandFilesystem(t *testing.T) {
 
 func TestContainsError(t *testing.T) {
 	tests := []struct {
+		name     string
 		output   string
 		expected bool
 	}{
-		{"Compiling foo v0.1.0\nFinished dev target", false},
-		{"error[E0433]: failed to resolve", true},
-		{"Traceback (most recent call last):", true},
-		{"SyntaxError: invalid syntax", true},
-		{"could not compile `foo`", true},
-		{"Build successful", false},
-		{"", false},
-		{"warning: unused variable", false},
+		{"clean compile", "Compiling foo v0.1.0\nFinished dev target", false},
+		{"rust error code", "error[E0433]: failed to resolve", true},
+		{"python traceback", "Traceback (most recent call last):", true},
+		{"syntax error", "SyntaxError: invalid syntax", true},
+		{"compile failure", "could not compile `foo`", true},
+		{"success", "Build successful", false},
+		{"empty", "", false},
+		{"warning only", "warning: unused variable", false},
+		{"zero errors", "Build complete. 0 errors, 2 warnings.", false},
+		{"one error", "Build complete. 1 error generated.", true},
+		{"code reference", "error_handler.go:15: func handleError()", false}, // false positive fix
+		{"variable name", "var errorCount = 0", false},                       // false positive fix
+		{"error line start", "error: cannot find module", true},
+		{"no such file", "no such file or directory: main.py", true},
 	}
 
 	for _, tt := range tests {
-		got := containsError(tt.output)
-		if got != tt.expected {
-			t.Errorf("containsError(%q) = %v, want %v", tt.output[:min(len(tt.output), 40)], got, tt.expected)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			got := containsError(tt.output)
+			if got != tt.expected {
+				t.Errorf("containsError(%q) = %v, want %v", tt.output[:min(len(tt.output), 50)], got, tt.expected)
+			}
+		})
 	}
 }
 

@@ -499,23 +499,38 @@ func detectVerifyCommand(steps []Step, cwd string) string {
 	}
 }
 
-// containsError checks if command output contains error indicators.
+// errorIndicators are regex patterns that detect actual build/runtime failures
+// while avoiding false positives on code references like error_handler or ErrorType.
+var errorIndicators = []*regexp.Regexp{
+	regexp.MustCompile(`(?im)^error\b`),                 // line starts with "error"
+	regexp.MustCompile(`(?i)\berror\[E\d+\]`),           // Rust error codes: error[E0433]
+	regexp.MustCompile(`(?i)error:\s+`),                  // "error: message"
+	regexp.MustCompile(`(?i)\bfailed\b.*\bcompil`),       // "failed to compile"
+	regexp.MustCompile(`(?im)^Traceback`),                // Python traceback
+	regexp.MustCompile(`(?i)SyntaxError|CompileError`),   // specific error types
+	regexp.MustCompile(`(?i)could not compile`),          // Rust catch-all
+	regexp.MustCompile(`(?i)\b[1-9]\d*\s+errors?\b`),    // "1 error generated" (but not "0 errors")
+	regexp.MustCompile(`(?i)cannot find module`),         // Go module errors
+	regexp.MustCompile(`(?i)no such file or directory`),  // filesystem errors
+	regexp.MustCompile(`(?i)unresolved import`),          // Rust unresolved
+	regexp.MustCompile(`(?i)undefined reference`),        // linker errors
+}
+
+// zeroErrorsPattern matches "0 errors" which is a success indicator, not a failure.
+var zeroErrorsPattern = regexp.MustCompile(`(?i)\b0\s+errors?\b`)
+
+// containsError checks if command output indicates an actual build or runtime failure.
+// Uses regex patterns to avoid false positives on variable names and code references.
 func containsError(output string) bool {
-	lower := strings.ToLower(output)
-	indicators := []string{
-		"error",
-		"failed",
-		"traceback",
-		"syntaxerror",
-		"compileerror",
-		"could not compile",
-		"cannot find",
-		"no such file",
-		"undefined",
-		"unresolved",
+	if output == "" {
+		return false
 	}
-	for _, ind := range indicators {
-		if strings.Contains(lower, ind) {
+	// "0 errors" is success
+	if zeroErrorsPattern.MatchString(output) {
+		return false
+	}
+	for _, pat := range errorIndicators {
+		if pat.MatchString(output) {
 			return true
 		}
 	}

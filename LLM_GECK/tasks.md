@@ -9,30 +9,46 @@
 - `[BLOCKED: reason]` — Cannot proceed
 - `[DECISION: topic]` — Awaiting human input
 
-## Current Sprint — Post-Benchmark Fixes
+## Current Sprint — Engineering Overhaul
 
-- [x] FIX-1: Route `prion run` through PlanExecutor for complex tasks
-- [x] FIX-2: Smarter repeat detection — allow retries after failures, increase threshold
-- [x] FIX-3: Filesystem-based verification detection (Cargo.toml/go.mod/*.py probing)
-- [x] FIX-4: Requirements completeness check — extract expected files, verify they exist
-- [x] FIX-5: Brace-counting JSON parser fallback (Strategy 4)
-- [x] FIX-6: Platform info in planner's per-step system prompt
-- [ ] Round 3 benchmark to validate all 6 fixes
+### Priority 1: Immediate Code Fixes (30 min)
+- [ ] 5.1: Replace containsError() string matching with regex patterns (eliminate false positives)
+- [ ] 5.2: Fix health check URL construction in LocalProvider.Available()
+- [ ] 5.3: Fix Available() fallback logic — return false when server unreachable
+
+### Priority 2: Native GGUF via Subprocess (Path A)
+- [ ] Create internal/llm/native.go — NativeProvider with process lifecycle
+- [ ] Implement freePort() for dynamic port allocation
+- [ ] Implement findLlamaServer() with search order ($PRION_LLAMA_SERVER → ~/.animus_prion/bin → PATH)
+- [ ] Health-check loop with timeout
+- [ ] Graceful shutdown (SIGTERM + Wait)
+- [ ] Compose with LocalProvider for Generate() calls
+- [ ] Add "native" provider to factory
+- [ ] Update config defaults for native provider
+- [ ] Add `prion setup` command for llama-server download
+
+### Priority 3: Round 3 Benchmark
+- [ ] Re-run benchmark with all fixes applied
+
+### Priority 4: Benchmark Harness
+- [ ] Create benchmarks/ directory structure
+- [ ] Implement `prion bench` subcommand
+- [ ] Machine-readable JSON output
+
+### Priority 5: MCP Server Mode
+- [ ] Add mcp-go dependency
+- [ ] Create cmd/prion/mcp.go — `prion serve`
+- [ ] Expose Manifold search, knowledge graph, vector store as MCP tools
 
 ## Backlog
-
-- [ ] GBNF grammar generation for native models
-- [ ] Native llama.cpp provider (CGo or subprocess)
-- [ ] Cross-platform testing (Linux, macOS)
+- [ ] GBNF grammar constraints (needs native GGUF first)
+- [ ] Tree-sitter multi-language parsing (Python, Rust, TypeScript)
 - [ ] CI/CD with GitHub Actions
 - [ ] Streaming support for API providers
-- [ ] Session persistence and transcript recording
-- [ ] Embedding provider implementation
+- [ ] Session persistence
 
-## Completed (Recent)
-
-- [x] Phase 0-6 complete — Entry #1
-- [x] Phase 7-9 complete — Entry #2
-- [x] Phase 10-12 complete — Entry #3
+## Completed
+- [x] Phase 0-12: Core framework — Entry #1-3
 - [x] Self-correction v1 + Benchmarks R1/R2 — Entry #4
-- [x] 6 post-benchmark fixes (FIX-1 through FIX-6) — Entry #4
+- [x] 6 post-benchmark fixes — Entry #4
+- [x] CLI UX overhaul (banner, auto-server, interactive default)

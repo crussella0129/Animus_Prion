@@ -49,8 +49,8 @@ type Config struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Model: ModelConfig{
-			Provider:      "local",
-			ModelName:     "qwen2.5-coder-7b",
+			Provider:      "native",
+			ModelName:     "qwen2.5-coder-7b-instruct-q4_k_m.gguf",
 			Temperature:   0.7,
 			ContextLength: 4096,
 			GPULayers:     -1,

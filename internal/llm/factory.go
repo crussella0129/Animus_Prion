@@ -6,12 +6,43 @@ import (
 	"github.com/crussella0129/Animus_Prion/internal/config"
 )
 
+// Shutdowner is implemented by providers that manage external processes.
+type Shutdowner interface {
+	Shutdown() error
+}
+
 // NewProvider creates an LLM provider from configuration.
-// "local" is the default — connects to any OpenAI-compatible endpoint (llama-server, vLLM, etc.)
+//   - "native": launches llama-server as a managed subprocess (recommended)
+//   - "local": connects to an already-running OpenAI-compatible endpoint
+//   - "anthropic": Anthropic Messages API
 func NewProvider(cfg *config.Config) (Provider, error) {
 	switch cfg.Model.Provider {
+	case "native":
+		// Managed subprocess: find model, launch llama-server, compose with LocalProvider
+		modelPath, err := FindModel(cfg.Model.ModelName)
+		if err != nil {
+			// Fall back to model_path if model_name didn't resolve
+			if cfg.Model.BaseURL != "" {
+				// They have a base_url — treat as "local" instead
+				return NewLocalProvider(LocalProviderConfig{
+					BaseURL:       cfg.Model.BaseURL,
+					APIKey:        cfg.Model.APIKey,
+					Model:         cfg.Model.ModelName,
+					ContextLength: cfg.Model.ContextLength,
+					SizeTier:      cfg.Model.SizeTier,
+				}), nil
+			}
+			return nil, err
+		}
+		return NewNativeProvider(NativeProviderConfig{
+			ModelPath:     modelPath,
+			GPULayers:     cfg.Model.GPULayers,
+			ContextLength: cfg.Model.ContextLength,
+			SizeTier:      cfg.Model.SizeTier,
+		})
+
 	case "local", "openai-compatible":
-		// Local inference via OpenAI-compatible API (llama-server, vLLM, LM Studio, etc.)
+		// Existing server — user manages llama-server/vLLM/LM Studio themselves
 		return NewLocalProvider(LocalProviderConfig{
 			BaseURL:       cfg.Model.BaseURL,
 			APIKey:        cfg.Model.APIKey,
@@ -28,7 +59,7 @@ func NewProvider(cfg *config.Config) (Provider, error) {
 		}), nil
 
 	default:
-		return nil, fmt.Errorf("unknown provider: %s (use 'local' or 'anthropic')", cfg.Model.Provider)
+		return nil, fmt.Errorf("unknown provider: %s (use 'native', 'local', or 'anthropic')", cfg.Model.Provider)
 	}
 }
 
