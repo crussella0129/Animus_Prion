@@ -515,6 +515,11 @@ func detectVerifyCommand(steps []Step, cwd string) string {
 	case wroteGo:
 		return "go build ./..."
 	case wrotePython:
+		// Find the actual .py file instead of hardcoding main.py
+		matches, _ := filepath.Glob(filepath.Join(cwd, "*.py"))
+		if len(matches) > 0 {
+			return "python -m py_compile " + filepath.Base(matches[0])
+		}
 		return "python -m py_compile main.py"
 	default:
 		return ""

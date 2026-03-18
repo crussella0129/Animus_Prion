@@ -206,10 +206,11 @@ func (t *WriteFileTool) Execute(args map[string]interface{}) (string, error) {
 // ListFilesTool lists files in a directory within the workspace.
 type ListFilesTool struct {
 	workspace *core.Workspace
+	checker   *permission.Checker
 }
 
-func NewListFilesTool(ws *core.Workspace) *ListFilesTool {
-	return &ListFilesTool{workspace: ws}
+func NewListFilesTool(ws *core.Workspace, checker *permission.Checker) *ListFilesTool {
+	return &ListFilesTool{workspace: ws, checker: checker}
 }
 
 func (t *ListFilesTool) Name() string { return "list_files" }
@@ -236,6 +237,11 @@ func (t *ListFilesTool) Execute(args map[string]interface{}) (string, error) {
 	resolved, err := t.workspace.Resolve(path)
 	if err != nil {
 		return "", err
+	}
+
+	result := t.checker.IsPathSafe(resolved)
+	if !result.Allowed {
+		return "", fmt.Errorf("path blocked: %s", result.Reason)
 	}
 
 	entries, err := os.ReadDir(resolved)

@@ -87,9 +87,10 @@ func ChunkByFunction(text string, source string) []Chunk {
 		lineNum := i + 1
 		trimmed := strings.TrimSpace(line)
 
-		// Detect function/method start
-		if !inFunc && (strings.HasPrefix(trimmed, "func ") || strings.HasPrefix(trimmed, "// ")) {
-			if current.Len() > 0 && inFunc {
+		// Detect function start — emit any accumulated pre-function code
+		if !inFunc && strings.HasPrefix(trimmed, "func ") {
+			if current.Len() > 0 {
+				// Emit package-level code before this function
 				chunks = append(chunks, Chunk{
 					Text:      current.String(),
 					Source:    source,
@@ -98,14 +99,9 @@ func ChunkByFunction(text string, source string) []Chunk {
 				})
 				current.Reset()
 			}
-
-			if strings.HasPrefix(trimmed, "func ") {
-				if current.Len() == 0 {
-					startLine = lineNum
-				}
-				inFunc = true
-				braceDepth = 0
-			}
+			startLine = lineNum
+			inFunc = true
+			braceDepth = 0
 		}
 
 		if current.Len() > 0 {

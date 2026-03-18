@@ -147,24 +147,23 @@ func (p *NativeProvider) Shutdown() error {
 		return nil
 	}
 
-	// Try graceful shutdown first
+	// Single Wait goroutine — avoids double-Wait race
+	done := make(chan error, 1)
+	go func() { done <- p.process.Wait() }()
+
 	if runtime.GOOS == "windows" {
-		// Windows doesn't have SIGTERM — kill directly
 		p.process.Process.Kill()
 	} else {
 		p.process.Process.Signal(os.Interrupt)
-		// Give it 5 seconds to shut down gracefully
-		done := make(chan error, 1)
-		go func() { done <- p.process.Wait() }()
 		select {
-		case <-done:
-			return nil
+		case err := <-done:
+			return err // graceful shutdown succeeded
 		case <-time.After(5 * time.Second):
 			p.process.Process.Kill()
 		}
 	}
 
-	return p.process.Wait()
+	return <-done // wait for process to fully exit after kill
 }
 
 // Port returns the port the managed server is listening on.

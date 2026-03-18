@@ -91,20 +91,22 @@ func TrimMessages(messages []Message, maxTokens int) []Message {
 	result := make([]Message, 0, len(messages))
 	result = append(result, messages[0]) // system prompt
 
-	// Walk backwards from second-to-last, adding until budget exceeded
+	// Walk backwards from second-to-last, collecting until budget exceeded
 	remaining := messages[1:]
-	kept := make([]Message, 0, len(remaining))
 	budget := maxTokens - EstimateTokens(messages[0].Content, false) - 4
 
+	// Find the cutoff index (oldest message to keep)
+	cutoff := len(remaining)
 	for i := len(remaining) - 1; i >= 0; i-- {
 		cost := EstimateTokens(remaining[i].Content, false) + 4
-		if budget-cost < 0 && len(kept) > 0 {
+		if budget-cost < 0 && i < len(remaining)-1 {
 			break
 		}
 		budget -= cost
-		kept = append([]Message{remaining[i]}, kept...)
+		cutoff = i
 	}
 
-	result = append(result, kept...)
+	// Append from cutoff to end (O(n), no prepend)
+	result = append(result, remaining[cutoff:]...)
 	return result
 }

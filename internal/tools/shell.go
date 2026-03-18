@@ -49,18 +49,25 @@ func (b *ExecutionBudget) Consume(d time.Duration) error {
 
 // ShellTool executes shell commands via list-based subprocess (no shell=true).
 type ShellTool struct {
-	workspace *core.Workspace
-	checker   *permission.Checker
-	budget    *ExecutionBudget
+	workspace        *core.Workspace
+	checker          *permission.Checker
+	budget           *ExecutionBudget
+	confirmDangerous bool
 }
 
 // NewShellTool creates a shell tool with workspace boundary and permission enforcement.
 func NewShellTool(ws *core.Workspace, checker *permission.Checker, budget *ExecutionBudget) *ShellTool {
 	return &ShellTool{
-		workspace: ws,
-		checker:   checker,
-		budget:    budget,
+		workspace:        ws,
+		checker:          checker,
+		budget:           budget,
+		confirmDangerous: true, // default: block dangerous commands
 	}
+}
+
+// SetConfirmDangerous controls whether dangerous commands (rm, sudo, etc.) are blocked.
+func (t *ShellTool) SetConfirmDangerous(confirm bool) {
+	t.confirmDangerous = confirm
 }
 
 func (t *ShellTool) Name() string { return "run_shell" }
@@ -129,6 +136,11 @@ func (t *ShellTool) Execute(args map[string]interface{}) (string, error) {
 	result := t.checker.CheckCommand(command)
 	if !result.Allowed {
 		return "", fmt.Errorf("command blocked: %s", result.Reason)
+	}
+
+	// Security: block dangerous commands (rm, sudo, kill, etc.) when confirm is enabled
+	if t.confirmDangerous && t.checker.IsDangerous(command) {
+		return "", fmt.Errorf("dangerous command blocked (rm, sudo, kill, etc.): %s — set confirm_dangerous: false in config to allow", command)
 	}
 
 	// Check execution budget

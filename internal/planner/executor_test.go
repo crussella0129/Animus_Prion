@@ -84,12 +84,12 @@ func TestDetectVerifyCommandFilesystem(t *testing.T) {
 		t.Errorf("with Cargo.toml + main.py: got %q, want 'cargo build'", got)
 	}
 
-	// Python only
+	// Python only — should find the actual .py file
 	dir2 := t.TempDir()
 	os.WriteFile(filepath.Join(dir2, "app.py"), []byte("pass"), 0644)
 	got = detectVerifyCommand(nil, dir2)
-	if got != "python -m py_compile main.py" {
-		t.Errorf("with app.py: got %q, want 'python -m py_compile main.py'", got)
+	if got != "python -m py_compile app.py" {
+		t.Errorf("with app.py: got %q, want 'python -m py_compile app.py'", got)
 	}
 
 	// Go only

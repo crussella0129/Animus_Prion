@@ -4,6 +4,7 @@ package tools
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"sync"
 )
 
@@ -77,7 +78,8 @@ func (r *Registry) Get(name string) (Tool, bool) {
 	return t, ok
 }
 
-// List returns all registered tool names.
+// List returns all registered tool names in sorted order.
+// Deterministic ordering ensures consistent system prompts across runs.
 func (r *Registry) List() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -85,6 +87,7 @@ func (r *Registry) List() []string {
 	for name := range r.tools {
 		names = append(names, name)
 	}
+	sort.Strings(names)
 	return names
 }
 

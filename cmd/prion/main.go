@@ -311,7 +311,7 @@ func setupEnv() (*env, error) {
 
 	registry.Register(tools.NewReadFileTool(ws, checker))
 	registry.Register(tools.NewWriteFileTool(ws, checker))
-	registry.Register(tools.NewListFilesTool(ws))
+	registry.Register(tools.NewListFilesTool(ws, checker))
 	registry.Register(tools.NewShellTool(ws, checker, budget))
 	registry.Register(tools.NewGitInitTool(ws))
 	registry.Register(tools.NewGitStatusTool(ws))

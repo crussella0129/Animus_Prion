@@ -159,14 +159,15 @@ func TestWriteFileToolBoundary(t *testing.T) {
 }
 
 func TestListFilesTool(t *testing.T) {
-	ws, _ := setupTestWorkspace(t)
+	ws, chk := setupTestWorkspace(t)
+	checker := chk
 
 	// Create some files
 	os.WriteFile(filepath.Join(ws.Root(), "a.txt"), []byte("a"), 0644)
 	os.WriteFile(filepath.Join(ws.Root(), "b.txt"), []byte("bb"), 0644)
 	os.Mkdir(filepath.Join(ws.Root(), "subdir"), 0755)
 
-	tool := NewListFilesTool(ws)
+	tool := NewListFilesTool(ws, checker)
 	result, err := tool.Execute(map[string]interface{}{})
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
@@ -181,8 +182,8 @@ func TestListFilesTool(t *testing.T) {
 }
 
 func TestListFilesToolEmpty(t *testing.T) {
-	ws, _ := setupTestWorkspace(t)
-	tool := NewListFilesTool(ws)
+	ws, chk := setupTestWorkspace(t)
+	tool := NewListFilesTool(ws, chk)
 
 	result, err := tool.Execute(map[string]interface{}{})
 	if err != nil {
