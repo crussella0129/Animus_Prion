@@ -234,3 +234,61 @@ None blocking. Known: `containsError()` may false-positive on strings containing
 - Round 3 benchmark to validate all 6 fixes
 - CI/CD with GitHub Actions
 - Embedding provider implementation
+
+---
+
+## Entry #5 — 2026-03-17
+
+### Summary
+Engineering overhaul session: implemented native GGUF provider (subprocess), fixed 3 code bugs (containsError false positives, health check URL, Available() logic), added live progress output, fixed prompt engineering for 7B tool use, increased timeout for 14B models, ran full code review (30 issues found across 4 severity levels). Bumped to v0.2.0.
+
+### Actions
+- Implemented NativeProvider: managed llama-server subprocess with auto-port, health-check, graceful shutdown
+- Fixed containsError() with regex patterns (eliminates false positives)
+- Fixed health check URL construction and Available() fallback logic
+- Added live progress output (Planning..., [1/3] step, Verifying...)
+- Improved prompt engineering: explicit write_file instruction, JSON format example for steps
+- Increased HTTP timeout to 300s for 14B models
+- Ran comprehensive code review: 5 critical, 6 high, 11 medium, 8 low, 8 test gaps
+- Installed prion to ~/.local/bin for PowerShell PATH access
+- Updated config default to native provider, version to 0.2.0
+
+### Files Changed
+- `internal/llm/native.go` — NEW: NativeProvider with process lifecycle
+- `internal/llm/factory.go` — "native" provider, Shutdowner interface
+- `internal/llm/api.go` — Health check fix, Available() fix, 300s timeout
+- `internal/planner/executor.go` — Progress callback, containsError regex, filesystem probing, prompt engineering
+- `internal/agent/agent.go` — Platform prompt, write_file instructions, repeat detection
+- `cmd/prion/main.go` — v0.2.0, env refactor, progress wiring, provider shutdown
+
+### Commits
+- `ed04124` — feat: proper CLI UX
+- `2df6a40` — feat: native GGUF provider + code fixes — v0.2.0
+- `fdcece9` — feat: live progress output
+- `bd0e308` — fix: prompt engineering for 7B tool use
+- `e959125` — fix: 300s timeout for 14B models
+
+### Findings (Code Review)
+- 2 CRITICAL security issues: workspace boundary bypass via path prefix collision, git tools have zero permission checking
+- WriteFileTool blindly unescapes \\n/\\t (corrupts source code with escape sequences)
+- Agent has no backoff on retryable errors (hammers API on 429s)
+- SplitConjunctions destroys case (returns lowercase)
+- No context.Context threading — can't cancel long operations
+- 8 packages have zero test coverage (agent, llm, git tools, manifold, decomposer, retrieval executor, chunker, indexer)
+
+### Issues
+- CRITICAL: Workspace boundary prefix collision needs immediate fix
+- CRITICAL: Git tools need permission checking
+- HIGH: WriteFileTool escape handling corrupts code
+- 14B model works on RTX 2080 Ti but needs 300s timeout
+
+### Checkpoint
+**Status:** CONTINUE — v0.2.0 shipped. Code review complete. Security fixes next.
+
+### Next
+- Fix workspace boundary (append path separator before prefix check)
+- Add permission checking to git tools
+- Fix WriteFileTool escape handling
+- Add context.Context to public APIs
+- Backoff on retryable errors
+- Test coverage for critical packages

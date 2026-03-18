@@ -9,46 +9,49 @@
 - `[BLOCKED: reason]` — Cannot proceed
 - `[DECISION: topic]` — Awaiting human input
 
-## Current Sprint — Engineering Overhaul
+## Current Sprint — Security & Quality (from Code Review)
 
-### Priority 1: Immediate Code Fixes (30 min)
-- [ ] 5.1: Replace containsError() string matching with regex patterns (eliminate false positives)
-- [ ] 5.2: Fix health check URL construction in LocalProvider.Available()
-- [ ] 5.3: Fix Available() fallback logic — return false when server unreachable
+### Tier 1: Security (CRITICAL) — Do First
+- [ ] Fix workspace boundary prefix collision (workspace.go:94,113) — append filepath.Separator
+- [ ] Add permission checking to all git tools (git.go) — deny-list + metachar enforcement
+- [ ] Fix workspace Contains() same prefix bug
 
-### Priority 2: Native GGUF via Subprocess (Path A)
-- [ ] Create internal/llm/native.go — NativeProvider with process lifecycle
-- [ ] Implement freePort() for dynamic port allocation
-- [ ] Implement findLlamaServer() with search order ($PRION_LLAMA_SERVER → ~/.animus_prion/bin → PATH)
-- [ ] Health-check loop with timeout
-- [ ] Graceful shutdown (SIGTERM + Wait)
-- [ ] Compose with LocalProvider for Generate() calls
-- [ ] Add "native" provider to factory
-- [ ] Update config defaults for native provider
-- [ ] Add `prion setup` command for llama-server download
+### Tier 2: Correctness (HIGH) — Do Next
+- [ ] Fix WriteFileTool blind \\n/\\t unescape (filesystem.go:176) — detect double-encoding
+- [ ] Fix SplitConjunctions case destruction (decomposer.go:76) — split on original, not lowered
+- [ ] Add exponential backoff for retryable errors (agent.go:92)
+- [ ] Add io.LimitReader for HTTP responses (api.go:135,283)
+- [ ] Escape SQL LIKE wildcards in GraphDB.SearchNodes (graphdb.go:181)
 
-### Priority 3: Round 3 Benchmark
-- [ ] Re-run benchmark with all fixes applied
+### Tier 3: Quality (MEDIUM) — Then These
+- [ ] Fix NativeProvider.Shutdown double-Wait race
+- [ ] Fix TrimMessages O(n^2) prepend → reverse approach
+- [ ] Fix ChunkByFunction dead code path
+- [ ] Wire ConfirmDangerous config to permission.IsDangerous()
+- [ ] Add permission checking to ListFilesTool
+- [ ] Fix detectVerifyCommand hardcoded "main.py"
+- [ ] Sort tool names in Registry.List() for deterministic ordering
 
-### Priority 4: Benchmark Harness
-- [ ] Create benchmarks/ directory structure
-- [ ] Implement `prion bench` subcommand
-- [ ] Machine-readable JSON output
+### Tier 4: Architecture — Plan for v0.3
+- [ ] Thread context.Context through public APIs (agent.Run, planner.Execute, provider.Generate)
+- [ ] Unify core.Message and llm.Message into single type
+- [ ] Add structured logging (slog)
+- [ ] Test coverage for: agent, llm, git tools, manifold, decomposer, retrieval executor, indexer
 
-### Priority 5: MCP Server Mode
-- [ ] Add mcp-go dependency
-- [ ] Create cmd/prion/mcp.go — `prion serve`
-- [ ] Expose Manifold search, knowledge graph, vector store as MCP tools
-
-## Backlog
-- [ ] GBNF grammar constraints (needs native GGUF first)
-- [ ] Tree-sitter multi-language parsing (Python, Rust, TypeScript)
+## Backlog (from Engineering Recommendations)
+- [ ] Round 3 benchmark with 14B model
+- [ ] Benchmark harness (`prion bench`)
+- [ ] MCP server mode (`prion serve`)
+- [ ] GBNF grammar constraints
+- [ ] Tree-sitter multi-language parsing
 - [ ] CI/CD with GitHub Actions
-- [ ] Streaming support for API providers
-- [ ] Session persistence
 
 ## Completed
 - [x] Phase 0-12: Core framework — Entry #1-3
-- [x] Self-correction v1 + Benchmarks R1/R2 — Entry #4
+- [x] Self-correction + Benchmarks R1/R2 — Entry #4
 - [x] 6 post-benchmark fixes — Entry #4
-- [x] CLI UX overhaul (banner, auto-server, interactive default)
+- [x] CLI UX overhaul — Entry #5
+- [x] Native GGUF provider (subprocess) — Entry #5
+- [x] Code fixes (containsError, health URL, Available) — Entry #5
+- [x] Progress output + prompt engineering — Entry #5
+- [x] Full code review (30 issues) — Entry #5
