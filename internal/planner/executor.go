@@ -184,11 +184,16 @@ func buildStepSystemPrompt(registry *tools.Registry) string {
 	return sb.String()
 }
 
+// ProgressFunc is called with status updates during plan execution.
+// If nil, progress is silent.
+type ProgressFunc func(msg string)
+
 // PlanExecutor orchestrates the full plan-then-execute pipeline.
 type PlanExecutor struct {
 	decomposer *Decomposer
 	executor   *ChunkedExecutor
 	workspace  *core.Workspace
+	onProgress ProgressFunc
 }
 
 // NewPlanExecutor creates a plan executor.
@@ -200,11 +205,24 @@ func NewPlanExecutor(provider llm.Provider, registry *tools.Registry, ws *core.W
 	}
 }
 
+// SetProgress sets a callback for progress updates (displayed to the user).
+func (pe *PlanExecutor) SetProgress(fn ProgressFunc) {
+	pe.onProgress = fn
+}
+
+func (pe *PlanExecutor) progress(format string, args ...interface{}) {
+	msg := fmt.Sprintf(format, args...)
+	log.Print(msg)
+	if pe.onProgress != nil {
+		pe.onProgress(msg)
+	}
+}
+
 // Execute runs the full plan-then-execute pipeline.
 func (pe *PlanExecutor) Execute(task string) (PlanResult, error) {
 	// Skip planning for simple tasks
 	if IsSimpleTask(task) {
-		log.Printf("Simple task detected, executing directly")
+		pe.progress("Executing directly...")
 		step := Step{Number: 1, Description: task, Type: inferStepType(task), Status: StatusPending}
 		result := pe.executor.ExecuteStep(&step, "")
 		return PlanResult{
@@ -215,10 +233,12 @@ func (pe *PlanExecutor) Execute(task string) (PlanResult, error) {
 	}
 
 	// Decompose task into steps
+	pe.progress("Planning...")
 	steps, err := pe.decomposer.Decompose(task, pe.workspace.CWD())
 	if err != nil {
 		return PlanResult{}, fmt.Errorf("planning failed: %w", err)
 	}
+	pe.progress("Plan: %d steps", len(steps))
 
 	// Heuristic fallback: if LLM produces ≤1 step for multi-conjunction task
 	parts := SplitConjunctions(task)
@@ -240,7 +260,7 @@ func (pe *PlanExecutor) Execute(task string) (PlanResult, error) {
 	allSuccess := true
 
 	for i := range steps {
-		log.Printf("Executing step %d/%d: %s", steps[i].Number, len(steps), steps[i].Description)
+		pe.progress("  [%d/%d] %s", steps[i].Number, len(steps), steps[i].Description)
 
 		result := pe.executor.ExecuteStep(&steps[i], learnedContext.String())
 		results = append(results, PlanResult{
@@ -314,11 +334,11 @@ func (pe *PlanExecutor) checkCompleteness(task string, steps []Step, learnedCont
 	}
 
 	if len(missing) == 0 {
-		log.Printf("Completeness check passed: all %d expected files exist", len(expected))
+		pe.progress("  All %d expected files present", len(expected))
 		return nil
 	}
 
-	log.Printf("Completeness check: %d/%d files missing: %v", len(missing), len(expected), missing)
+	pe.progress("  Missing %d files: %v", len(missing), missing)
 	learnedContext.WriteString(fmt.Sprintf("\nMissing files that were requested: %s\n", strings.Join(missing, ", ")))
 
 	var results []PlanResult
@@ -390,7 +410,7 @@ func (pe *PlanExecutor) verifyAndRepair(steps []Step, learnedContext *strings.Bu
 		return nil // nothing to verify
 	}
 
-	log.Printf("Auto-verify: running '%s'", verifyCmd)
+	pe.progress("  Verifying: %s", verifyCmd)
 
 	// Run the verification command directly via the tool registry
 	verifyStep := Step{
@@ -415,7 +435,7 @@ func (pe *PlanExecutor) verifyAndRepair(steps []Step, learnedContext *strings.Bu
 			errorOutput = verifyResult.Error.Error()
 		}
 
-		log.Printf("Verification failed, running repair step")
+		pe.progress("  Verification failed — repairing...")
 		learnedContext.WriteString(fmt.Sprintf("\nVerification FAILED:\n%s\n", truncate(errorOutput, 1000)))
 
 		// Repair step: give the model the error and ask it to fix
@@ -435,7 +455,7 @@ func (pe *PlanExecutor) verifyAndRepair(steps []Step, learnedContext *strings.Bu
 			Success: repairResult.Error == nil,
 		})
 	} else {
-		log.Printf("Verification passed")
+		pe.progress("  Verification passed")
 	}
 
 	return results
