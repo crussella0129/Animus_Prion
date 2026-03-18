@@ -88,6 +88,8 @@ func TestPathSafety(t *testing.T) {
 		{"project/README.md", true},
 		{"/etc/passwd", false},
 		{"/etc/shadow", false},
+		{"/etc", false},              // exact match on dangerous dir
+		{"/etcetera/safe.txt", true}, // prefix collision — must NOT be blocked
 	}
 
 	for _, tt := range tests {

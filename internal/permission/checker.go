@@ -127,10 +127,12 @@ func (c *Checker) IsPathSafe(path string) Result {
 	}
 
 	// Check against dangerous directories
+	// Use dir + separator to avoid prefix collision (e.g. "/etcetera" matching "/etc")
+	normalReal := strings.ToLower(filepath.Clean(real))
 	for dir := range DangerousDirectories {
 		normalDir := strings.ToLower(filepath.Clean(dir))
-		normalReal := strings.ToLower(filepath.Clean(real))
-		if strings.HasPrefix(normalReal, normalDir) {
+		dirWithSep := normalDir + string(filepath.Separator)
+		if normalReal == normalDir || strings.HasPrefix(normalReal, dirWithSep) {
 			return Result{Allowed: false, Reason: "path is in a dangerous directory: " + dir}
 		}
 	}
