@@ -91,11 +91,10 @@ func (w *Workspace) Resolve(path string) (string, error) {
 	normalReal := strings.ToLower(filepath.Clean(real))
 
 	// Check: is the resolved path within the root?
-	if !strings.HasPrefix(normalReal, normalRoot) {
-		// Allow exact match (the root itself)
-		if normalReal != normalRoot {
-			return "", fmt.Errorf("%w: %s is outside %s", ErrWorkspaceBoundary, path, w.root)
-		}
+	// Use root + separator to prevent prefix collision (e.g. "project-evil" matching "project")
+	rootWithSep := normalRoot + string(filepath.Separator)
+	if normalReal != normalRoot && !strings.HasPrefix(normalReal, rootWithSep) {
+		return "", fmt.Errorf("%w: %s is outside %s", ErrWorkspaceBoundary, path, w.root)
 	}
 
 	return real, nil
@@ -110,5 +109,6 @@ func (w *Workspace) Contains(path string) bool {
 	}
 	normalRoot := strings.ToLower(filepath.Clean(w.root))
 	normalAbs := strings.ToLower(filepath.Clean(abs))
-	return strings.HasPrefix(normalAbs, normalRoot)
+	rootWithSep := normalRoot + string(filepath.Separator)
+	return normalAbs == normalRoot || strings.HasPrefix(normalAbs, rootWithSep)
 }

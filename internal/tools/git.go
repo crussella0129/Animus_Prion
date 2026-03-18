@@ -8,8 +8,80 @@ import (
 	"github.com/crussella0129/Animus_Prion/internal/core"
 )
 
-// gitExec runs a git command with list-based args (no shell interpretation).
+// blockedGitSubcommands are git operations that should never be run by the agent.
+var blockedGitSubcommands = map[string]string{
+	"push":   "network operation — blocked for safety",
+	"pull":   "network operation — blocked for safety",
+	"clone":  "network operation — blocked for safety",
+	"fetch":  "network operation — blocked for safety",
+	"remote": "modifies remote configuration — blocked for safety",
+	"clean":  "destructive — permanently deletes untracked files",
+	"stash":  "can lose uncommitted work",
+}
+
+// dangerousGitFlags are flags blocked across all subcommands (matched as exact args).
+var dangerousGitFlags = map[string]string{
+	"--force":     "force operations are destructive",
+	"--hard":      "hard reset discards all changes",
+	"--no-verify": "skipping hooks is unsafe",
+}
+
+// validateGitArgs checks a git command for blocked subcommands and dangerous arguments.
+func validateGitArgs(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("empty git command")
+	}
+
+	subcommand := args[0]
+
+	// Check blocked subcommands
+	if reason, blocked := blockedGitSubcommands[subcommand]; blocked {
+		return fmt.Errorf("git %s is blocked: %s", subcommand, reason)
+	}
+
+	// Check for dangerous flags (exact match per arg, not substring)
+	for _, arg := range args[1:] {
+		if reason, blocked := dangerousGitFlags[arg]; blocked {
+			return fmt.Errorf("git flag %s blocked: %s", arg, reason)
+		}
+	}
+
+	// Block "git add -A" and "git add ." (too broad — stage specific files)
+	if subcommand == "add" {
+		for _, arg := range args[1:] {
+			if arg == "-A" || arg == "--all" || arg == "." {
+				return fmt.Errorf("git add %s is too broad — stage specific files instead", arg)
+			}
+		}
+	}
+
+	// Block "git reset --hard" specifically
+	if subcommand == "reset" {
+		for _, arg := range args[1:] {
+			if arg == "--hard" {
+				return fmt.Errorf("git reset --hard is destructive — blocked for safety")
+			}
+		}
+	}
+
+	// Block "git checkout -- <file>" (discards changes)
+	if subcommand == "checkout" {
+		for i, arg := range args[1:] {
+			if arg == "--" && i+2 < len(args) {
+				return fmt.Errorf("git checkout -- <file> discards changes — blocked for safety")
+			}
+		}
+	}
+
+	return nil
+}
+
+// gitExec runs a git command with list-based args after security validation.
 func gitExec(ws *core.Workspace, args ...string) (string, error) {
+	if err := validateGitArgs(args); err != nil {
+		return "", err
+	}
+
 	cmd := exec.Command("git", args...)
 	cmd.Dir = ws.CWD()
 	output, err := cmd.CombinedOutput()
@@ -109,12 +181,12 @@ type GitAddTool struct{ workspace *core.Workspace }
 func NewGitAddTool(ws *core.Workspace) *GitAddTool { return &GitAddTool{workspace: ws} }
 
 func (t *GitAddTool) Name() string        { return "git_add" }
-func (t *GitAddTool) Description() string  { return "Stage files for commit." }
+func (t *GitAddTool) Description() string  { return "Stage specific files for commit. Do not use -A or . (too broad)." }
 func (t *GitAddTool) Parameters() ParameterSchema {
 	return ParameterSchema{
 		Type: "object",
 		Properties: map[string]ParameterSchema{
-			"files": {Type: "string", Description: "Space-separated list of files to stage"},
+			"files": {Type: "string", Description: "Space-separated list of specific files to stage"},
 		},
 		Required: []string{"files"},
 	}
@@ -183,7 +255,7 @@ type GitCheckoutTool struct{ workspace *core.Workspace }
 func NewGitCheckoutTool(ws *core.Workspace) *GitCheckoutTool { return &GitCheckoutTool{workspace: ws} }
 
 func (t *GitCheckoutTool) Name() string        { return "git_checkout" }
-func (t *GitCheckoutTool) Description() string  { return "Switch to a branch." }
+func (t *GitCheckoutTool) Description() string  { return "Switch to an existing branch." }
 func (t *GitCheckoutTool) Parameters() ParameterSchema {
 	return ParameterSchema{
 		Type: "object",

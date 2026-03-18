@@ -88,3 +88,43 @@ func TestWorkspaceContains(t *testing.T) {
 		t.Error("should not contain /etc/passwd")
 	}
 }
+
+func TestWorkspacePrefixCollision(t *testing.T) {
+	// CRITICAL security test: "project-evil" must NOT pass boundary check for "project"
+	dir := t.TempDir()
+	ws, err := NewWorkspace(dir)
+	if err != nil {
+		t.Fatalf("NewWorkspace failed: %v", err)
+	}
+
+	// Create a sibling directory with the workspace name as prefix
+	evilDir := dir + "-evil"
+	os.MkdirAll(evilDir, 0755)
+	defer os.RemoveAll(evilDir)
+
+	evilFile := filepath.Join(evilDir, "steal.txt")
+	os.WriteFile(evilFile, []byte("secrets"), 0644)
+
+	// Resolve must reject the evil path
+	_, err = ws.Resolve(evilFile)
+	if err == nil {
+		t.Fatalf("SECURITY: Resolve accepted %s which is outside workspace %s", evilFile, dir)
+	}
+	if !errors.Is(err, ErrWorkspaceBoundary) {
+		t.Errorf("expected ErrWorkspaceBoundary, got: %v", err)
+	}
+
+	// Contains must also reject it
+	if ws.Contains(evilFile) {
+		t.Fatalf("SECURITY: Contains returned true for %s which is outside workspace %s", evilFile, dir)
+	}
+
+	// But the root itself should still work
+	if !ws.Contains(dir) {
+		t.Error("root directory itself should be contained")
+	}
+	_, err = ws.Resolve(dir)
+	if err != nil {
+		t.Errorf("root directory should resolve: %v", err)
+	}
+}
