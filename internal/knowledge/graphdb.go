@@ -168,23 +168,34 @@ func (g *GraphDB) DeleteByFile(file string) error {
 
 // SearchNodes finds nodes matching a query string (by name or ID).
 func (g *GraphDB) SearchNodes(query string) ([]Node, error) {
+	// Escape LIKE wildcards to prevent injection via % and _
+	escaped := escapeLike(query)
+
 	rows, err := g.db.Query(`
 		SELECT id, name, kind, file, line, signature, doc, package
 		FROM nodes
-		WHERE name LIKE ? OR id LIKE ?
+		WHERE name LIKE ? ESCAPE '\' OR id LIKE ? ESCAPE '\'
 		ORDER BY
 			CASE WHEN name = ? THEN 0
-			     WHEN name LIKE ? THEN 1
+			     WHEN name LIKE ? ESCAPE '\' THEN 1
 			     ELSE 2
 			END
 		LIMIT 20
-	`, "%"+query+"%", "%"+query+"%", query, query+"%")
+	`, "%"+escaped+"%", "%"+escaped+"%", query, escaped+"%")
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
 	return scanNodes(rows)
+}
+
+// escapeLike escapes SQL LIKE wildcard characters (% and _).
+func escapeLike(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `%`, `\%`)
+	s = strings.ReplaceAll(s, `_`, `\_`)
+	return s
 }
 
 // GetNode retrieves a node by exact ID.

@@ -90,7 +90,13 @@ func (a *Agent) Run(input string) (string, error) {
 		if err != nil {
 			classified := core.ClassifyError(err)
 			if classified.Retryable && turn < a.maxTurns-1 {
-				log.Printf("Retryable error on turn %d: %v", turn, err)
+				// Exponential backoff: 1s, 2s, 4s, 8s, capped at 30s
+				backoff := time.Duration(1<<uint(min(turn, 4))) * time.Second
+				if backoff > 30*time.Second {
+					backoff = 30 * time.Second
+				}
+				log.Printf("Retryable error on turn %d, backing off %v: %v", turn, backoff, err)
+				time.Sleep(backoff)
 				continue
 			}
 			if lastToolResult != "" {

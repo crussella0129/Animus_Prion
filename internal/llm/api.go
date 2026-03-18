@@ -132,7 +132,7 @@ func (p *LocalProvider) Generate(messages []Message, opts GenerateOptions) (stri
 	}
 	defer resp.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 10*1024*1024)) // 10MB cap
 	if err != nil {
 		return "", fmt.Errorf("reading response: %w", err)
 	}
@@ -279,7 +279,7 @@ func (p *AnthropicProvider) Generate(messages []Message, opts GenerateOptions) (
 	}
 	defer resp.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 10*1024*1024)) // 10MB cap
 	if err != nil {
 		return "", fmt.Errorf("reading response: %w", err)
 	}

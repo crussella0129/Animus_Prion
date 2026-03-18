@@ -172,9 +172,13 @@ func (t *WriteFileTool) Execute(args map[string]interface{}) (string, error) {
 		return "", fmt.Errorf("path blocked: %s", result.Reason)
 	}
 
-	// Handle JSON-escaped content (LLMs sometimes produce \\n instead of \n)
-	content = strings.ReplaceAll(content, "\\n", "\n")
-	content = strings.ReplaceAll(content, "\\t", "\t")
+	// Handle JSON-double-encoded content: only unescape \\n → \n if the content
+	// has NO real newlines (indicating the LLM double-escaped the entire string).
+	// If real newlines exist, the content is already correct — don't corrupt it.
+	if strings.Contains(content, "\\n") && !strings.Contains(content, "\n") {
+		content = strings.ReplaceAll(content, "\\n", "\n")
+		content = strings.ReplaceAll(content, "\\t", "\t")
+	}
 
 	// Create parent directories
 	dir := filepath.Dir(resolved)

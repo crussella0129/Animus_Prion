@@ -68,14 +68,18 @@ Respond with numbered steps only. Example format:
 
 // SplitConjunctions splits multi-part tasks into sub-tasks.
 // Handles temporal ("then"), verb-based (", and <verb>"), and sentence boundaries.
+// Preserves original casing of the task text.
 func SplitConjunctions(task string) []string {
-	// Temporal conjunctions
+	lower := strings.ToLower(task)
+	// Temporal conjunctions — find in lowercase, split from original
 	temporals := []string{" then ", " and then ", " after that ", " next ", " finally "}
 	for _, t := range temporals {
-		if strings.Contains(strings.ToLower(task), t) {
-			parts := strings.SplitN(strings.ToLower(task), t, 2)
-			if len(parts) == 2 {
-				return []string{strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])}
+		idx := strings.Index(lower, t)
+		if idx >= 0 {
+			part1 := strings.TrimSpace(task[:idx])
+			part2 := strings.TrimSpace(task[idx+len(t):])
+			if part1 != "" && part2 != "" {
+				return []string{part1, part2}
 			}
 		}
 	}
