@@ -196,7 +196,14 @@ func (t *GitAddTool) Execute(args map[string]interface{}) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("files must be a string")
 	}
-	gitArgs := append([]string{"add"}, strings.Fields(files)...)
+	// Validate every file path against the workspace boundary
+	paths := strings.Fields(files)
+	for _, p := range paths {
+		if _, err := t.workspace.Resolve(p); err != nil {
+			return "", fmt.Errorf("git add blocked: %w", err)
+		}
+	}
+	gitArgs := append([]string{"add"}, paths...)
 	return gitExec(t.workspace, gitArgs...)
 }
 

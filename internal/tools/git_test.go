@@ -2,6 +2,8 @@ package tools
 
 import (
 	"testing"
+
+	"github.com/crussella0129/Animus_Prion/internal/core"
 )
 
 func TestValidateGitArgsBlocked(t *testing.T) {
@@ -70,5 +72,31 @@ func TestValidateGitArgsEmpty(t *testing.T) {
 	err := validateGitArgs(nil)
 	if err == nil {
 		t.Error("expected error for empty git args")
+	}
+}
+
+func TestGitAddToolPathTraversal(t *testing.T) {
+	dir := t.TempDir()
+	ws, err := core.NewWorkspace(dir)
+	if err != nil {
+		t.Fatalf("NewWorkspace: %v", err)
+	}
+
+	tool := NewGitAddTool(ws)
+
+	// Path traversal should be blocked by workspace boundary
+	_, err = tool.Execute(map[string]interface{}{
+		"files": "../../etc/shadow",
+	})
+	if err == nil {
+		t.Fatal("SECURITY: git add with path traversal should be blocked")
+	}
+
+	// Absolute path outside workspace should be blocked
+	_, err = tool.Execute(map[string]interface{}{
+		"files": "/etc/passwd",
+	})
+	if err == nil {
+		t.Fatal("SECURITY: git add with absolute path outside workspace should be blocked")
 	}
 }
