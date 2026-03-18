@@ -5,8 +5,12 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"math/rand"
+	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -26,19 +30,47 @@ var (
 	version   = "0.1.0"
 )
 
+var greetings = []string{
+	"What are we building today?",
+	"What can I help you with?",
+	"Ready when you are.",
+	"What are we working on?",
+	"Let's get to work.",
+	"What's on the agenda?",
+	"Point me at the problem.",
+	"What needs doing?",
+	"Standing by for orders.",
+	"Awaiting instructions.",
+}
+
+func randomGreeting() string {
+	return greetings[rand.Intn(len(greetings))]
+}
+
+func printBanner() {
+	fmt.Println()
+	fmt.Println("  ╔═══════════════════════════════════════╗")
+	fmt.Println("  ║       ANIMUS PRION  ·  Activated      ║")
+	fmt.Printf("  ║  v%-6s  %s/%-6s  Qwen 7B  ║\n", version, runtime.GOOS, runtime.GOARCH)
+	fmt.Println("  ╚═══════════════════════════════════════╝")
+	fmt.Println()
+	fmt.Printf("  %s\n\n", randomGreeting())
+}
+
 func main() {
 	rootCmd := &cobra.Command{
 		Use:   "prion",
 		Short: "Prion — local-first LLM agent",
 		Long:  "Prion is a local-first LLM agent with plan-then-execute architecture, built for lightning speed.",
+		// Default action: launch interactive mode
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return interactiveSession()
+		},
 	}
 
-	// Persistent flags
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default: ~/.animus_prion/config.yaml)")
 	rootCmd.PersistentFlags().StringVar(&workspace, "workspace", ".", "workspace root directory")
 
-	// Subcommands
-	rootCmd.AddCommand(chatCmd())
 	rootCmd.AddCommand(runCmd())
 	rootCmd.AddCommand(versionCmd())
 	rootCmd.AddCommand(configCmd())
@@ -49,72 +81,212 @@ func main() {
 	}
 }
 
-// chatCmd starts an interactive REPL session.
-func chatCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "chat",
-		Short: "Start an interactive chat session",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ag, err := setupAgent()
-			if err != nil {
-				return err
-			}
-
-			fmt.Println("Prion v" + version + " — type /help for commands, /quit to exit")
-			fmt.Println()
-
-			scanner := bufio.NewScanner(os.Stdin)
-			for {
-				fmt.Print(">>> ")
-				if !scanner.Scan() {
-					break
-				}
-
-				input := strings.TrimSpace(scanner.Text())
-				if input == "" {
-					continue
-				}
-
-				// Slash commands
-				if strings.HasPrefix(input, "/") {
-					if handleSlashCommand(input, ag) {
-						continue
-					}
-					if input == "/quit" || input == "/exit" {
-						fmt.Println("Goodbye!")
-						return nil
-					}
-				}
-
-				start := time.Now()
-				response, err := ag.Run(input)
-				elapsed := time.Since(start)
-
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-					continue
-				}
-
-				fmt.Println()
-				fmt.Println(response)
-				fmt.Printf("\n[%.1fs]\n\n", elapsed.Seconds())
-			}
-
-			return nil
-		},
+// ensureServer checks if llama-server is reachable; if not, tries to start it.
+func ensureServer() error {
+	cfg, err := config.Load(mustConfigPath())
+	if err != nil {
+		return nil // non-fatal, will fail later on generate
 	}
+
+	baseURL := cfg.Model.BaseURL
+	if baseURL == "" {
+		baseURL = "http://127.0.0.1:8090/v1"
+	}
+
+	// Strip /v1 to get health endpoint
+	healthURL := strings.TrimSuffix(baseURL, "/v1") + "/health"
+
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get(healthURL)
+	if err == nil {
+		resp.Body.Close()
+		if resp.StatusCode == 200 {
+			return nil // server is already running
+		}
+	}
+
+	// Server not running — try to start it
+	fmt.Println("  Starting llama-server...")
+
+	modelPath := cfg.Model.ModelName
+	// Check common model locations
+	candidates := []string{
+		filepath.Join(os.Getenv("USERPROFILE"), ".animus", "models", modelPath),
+		filepath.Join(os.Getenv("HOME"), ".animus", "models", modelPath),
+		modelPath, // absolute path
+	}
+
+	var foundModel string
+	for _, c := range candidates {
+		if _, err := os.Stat(c); err == nil {
+			foundModel = c
+			break
+		}
+	}
+
+	if foundModel == "" {
+		return fmt.Errorf("model not found: %s\n  Start llama-server manually:\n  llama-server --model <path-to-gguf> --port 8090", modelPath)
+	}
+
+	serverBin := findLlamaServer()
+	if serverBin == "" {
+		return fmt.Errorf("llama-server not found.\n  Start it manually:\n  llama-server --model %s --port 8090", foundModel)
+	}
+
+	// Start server in background
+	cmd := exec.Command(serverBin,
+		"--model", foundModel,
+		"--ctx-size", "4096",
+		"--n-gpu-layers", "-1",
+		"--port", "8090",
+		"--host", "127.0.0.1",
+	)
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start llama-server: %w", err)
+	}
+
+	// Wait for it to become healthy
+	for i := 0; i < 30; i++ {
+		time.Sleep(1 * time.Second)
+		resp, err := client.Get(healthURL)
+		if err == nil {
+			resp.Body.Close()
+			if resp.StatusCode == 200 {
+				fmt.Println("  llama-server ready.")
+				return nil
+			}
+		}
+	}
+
+	return fmt.Errorf("llama-server started but didn't become healthy within 30s")
 }
 
-// runCmd executes a single task and exits.
-// Routes complex tasks through PlanExecutor (with verify/repair and completeness checks).
-// Simple tasks go through the raw agent loop for speed.
+func findLlamaServer() string {
+	// Check common locations
+	candidates := []string{
+		filepath.Join(os.Getenv("USERPROFILE"), ".animus", "bin", "llama-server.exe"),
+		filepath.Join(os.Getenv("HOME"), ".animus", "bin", "llama-server.exe"),
+		filepath.Join(os.Getenv("USERPROFILE"), ".animus", "bin", "llama-server"),
+	}
+	for _, c := range candidates {
+		if _, err := os.Stat(c); err == nil {
+			return c
+		}
+	}
+	// Check PATH
+	if p, err := exec.LookPath("llama-server"); err == nil {
+		return p
+	}
+	return ""
+}
+
+func mustConfigPath() string {
+	p, _ := configPath()
+	return p
+}
+
+// interactiveSession is the main entry point — banner + REPL.
+func interactiveSession() error {
+	printBanner()
+
+	if err := ensureServer(); err != nil {
+		fmt.Fprintf(os.Stderr, "  Warning: %v\n\n", err)
+	}
+
+	ag, err := setupAgent()
+	if err != nil {
+		return fmt.Errorf("setup failed: %w", err)
+	}
+
+	fmt.Println("  Type your task, or /help for commands, /quit to exit.")
+	fmt.Println()
+
+	scanner := bufio.NewScanner(os.Stdin)
+	// Allow long inputs (default is 64KB which is fine, but be explicit)
+	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
+
+	for {
+		fmt.Print("prion> ")
+		if !scanner.Scan() {
+			break
+		}
+
+		input := strings.TrimSpace(scanner.Text())
+		if input == "" {
+			continue
+		}
+
+		// Slash commands
+		if strings.HasPrefix(input, "/") {
+			if input == "/quit" || input == "/exit" {
+				fmt.Println("Shutting down. Until next time.")
+				return nil
+			}
+			if handleSlashCommand(input, ag) {
+				continue
+			}
+		}
+
+		start := time.Now()
+
+		// Route: complex tasks → planner, simple → agent
+		var response string
+		if planner.IsSimpleTask(input) {
+			response, err = ag.Run(input)
+		} else {
+			e, envErr := setupEnv()
+			if envErr != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", envErr)
+				continue
+			}
+			pe := planner.NewPlanExecutor(e.provider, e.registry, e.workspace)
+			result, planErr := pe.Execute(input)
+			if planErr != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", planErr)
+				continue
+			}
+			response = result.Summary
+			if !result.Success {
+				response += "\n(Warning: some steps had issues)"
+			}
+			err = nil
+		}
+
+		elapsed := time.Since(start)
+
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n\n", err)
+			continue
+		}
+
+		if response != "" {
+			fmt.Println()
+			fmt.Println(response)
+		}
+		fmt.Printf("\n[%.1fs]\n\n", elapsed.Seconds())
+	}
+
+	return nil
+}
+
+// runCmd executes a single task and exits, OR launches interactive if no args given.
 func runCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "run [task]",
-		Short: "Execute a single task",
-		Args:  cobra.MinimumNArgs(1),
+		Short: "Execute a task (or start interactive mode with no args)",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// No args → interactive mode
+			if len(args) == 0 {
+				return interactiveSession()
+			}
+
 			task := strings.Join(args, " ")
+
+			if err := ensureServer(); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+			}
 
 			// Simple tasks → agent loop (fast path)
 			if planner.IsSimpleTask(task) {
@@ -130,12 +302,12 @@ func runCmd() *cobra.Command {
 				return nil
 			}
 
-			// Complex tasks → plan-then-execute (with verify + completeness)
-			env, err := setupEnv()
+			// Complex tasks → plan-then-execute
+			e, err := setupEnv()
 			if err != nil {
 				return err
 			}
-			pe := planner.NewPlanExecutor(env.provider, env.registry, env.workspace)
+			pe := planner.NewPlanExecutor(e.provider, e.registry, e.workspace)
 			result, err := pe.Execute(task)
 			if err != nil {
 				return err
@@ -178,12 +350,10 @@ func configCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-
 			cfg := config.DefaultConfig()
 			if err := cfg.Save(path); err != nil {
 				return err
 			}
-
 			fmt.Printf("Configuration written to %s\n", path)
 			return nil
 		},
@@ -197,7 +367,6 @@ func configCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-
 			data, err := os.ReadFile(path)
 			if err != nil {
 				if os.IsNotExist(err) {
@@ -206,7 +375,6 @@ func configCmd() *cobra.Command {
 				}
 				return err
 			}
-
 			fmt.Println(string(data))
 			return nil
 		},
@@ -307,15 +475,17 @@ func configPath() (string, error) {
 func handleSlashCommand(input string, ag *agent.Agent) bool {
 	switch {
 	case input == "/help":
-		fmt.Println("Commands:")
-		fmt.Println("  /help    — Show this help")
-		fmt.Println("  /tools   — List available tools")
-		fmt.Println("  /reset   — Clear conversation history")
-		fmt.Println("  /quit    — Exit")
-		return true
-
-	case input == "/tools":
-		fmt.Println("Use /help for available commands")
+		fmt.Println()
+		fmt.Println("  Commands:")
+		fmt.Println("    /help    Show this help")
+		fmt.Println("    /reset   Clear conversation history")
+		fmt.Println("    /quit    Exit Prion")
+		fmt.Println()
+		fmt.Println("  Usage:")
+		fmt.Println("    Type a task and press Enter.")
+		fmt.Println("    Simple questions go through the fast agent loop.")
+		fmt.Println("    Complex multi-file tasks use the planner with auto-verify.")
+		fmt.Println()
 		return true
 
 	case input == "/reset":
