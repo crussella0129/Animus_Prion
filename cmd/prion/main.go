@@ -323,6 +323,15 @@ func setupEnv() (*env, error) {
 	registry.Register(tools.NewGitBranchTool(ws))
 	registry.Register(tools.NewGitCheckoutTool(ws))
 
+	// Hardware auto-detection
+	hw := llm.DetectHardware()
+	rec := llm.RecommendBackend(hw)
+	if hw.GPU.Available {
+		fmt.Printf("  GPU: %s (%d MB)\n", hw.GPU.Name, hw.GPU.VRAMMiB)
+	} else {
+		fmt.Printf("  GPU: none detected — CPU mode\n")
+	}
+	fmt.Printf("  Backend: %s\n", rec.Backend)
 	fmt.Println("  Loading model...")
 	provider, err := llm.NewProvider(cfg)
 	if err != nil {
