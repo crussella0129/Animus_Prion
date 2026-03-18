@@ -230,8 +230,11 @@ func defaultSystemPrompt(registry *tools.Registry) string {
 	sb.WriteString("\nTo use a tool, respond with a JSON object: {\"name\": \"tool_name\", \"arguments\": {...}}\n")
 	sb.WriteString("You may ONLY use the tools listed above. Do not invent tools.\n")
 	sb.WriteString("When you have completed the task, respond with plain text (no JSON).\n")
-	sb.WriteString("\nIMPORTANT: After writing code files, ALWAYS verify your work by running the compiler or interpreter ")
-	sb.WriteString("(e.g. run_shell with 'cargo build' or 'python script.py'). If it fails, read the error and fix it.\n")
+	sb.WriteString("\nRULES:\n")
+	sb.WriteString("- To create files, use write_file with the full path and content. Do NOT use run_shell for file creation.\n")
+	sb.WriteString("- write_file automatically creates parent directories — no need for mkdir.\n")
+	sb.WriteString("- After writing code, verify with run_shell (e.g. 'cargo build' or 'python -c \"print(1)\"').\n")
+	sb.WriteString("- Write one file at a time. After each write_file, proceed to the next file.\n")
 
 	return sb.String()
 }

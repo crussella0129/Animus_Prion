@@ -2,7 +2,6 @@ package planner
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -60,13 +59,15 @@ func (e *ChunkedExecutor) ExecuteStep(step *Step, learnedContext string) StepRes
 		}
 	}
 
-	// Build per-step prompt with explicit tool restriction
+	// Build per-step prompt with explicit tool restriction and format example
 	toolNames := filtered.List()
 	prompt := fmt.Sprintf(
-		"Execute this step: %s\n\n"+
-			"You may ONLY use the tools listed above: %s\n"+
-			"Do NOT use any other tools.\n"+
-			"Working directory: %s\n",
+		"Execute this step by calling a tool: %s\n\n"+
+			"Available tools: %s\n"+
+			"Working directory: %s\n\n"+
+			"You MUST respond with a JSON tool call. Example:\n"+
+			"{\"name\": \"write_file\", \"arguments\": {\"path\": \"example.py\", \"content\": \"print('hello')\"}}\n\n"+
+			"Do it now. Respond with ONLY the JSON tool call, no explanation.\n",
 		step.Description,
 		strings.Join(toolNames, ", "),
 		e.workspace.CWD(),
@@ -180,7 +181,9 @@ func buildStepSystemPrompt(registry *tools.Registry) string {
 		t, _ := registry.Get(name)
 		sb.WriteString(fmt.Sprintf("- %s: %s\n", name, t.Description()))
 	}
-	sb.WriteString("\nRespond with a JSON tool call or plain text when done.\n")
+	sb.WriteString("\nTo create files, use write_file — it creates parent directories automatically.\n")
+	sb.WriteString("Do NOT use run_shell for mkdir or file creation. Use write_file directly.\n")
+	sb.WriteString("Respond with a JSON tool call or plain text when done.\n")
 	return sb.String()
 }
 
@@ -212,7 +215,6 @@ func (pe *PlanExecutor) SetProgress(fn ProgressFunc) {
 
 func (pe *PlanExecutor) progress(format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
-	log.Print(msg)
 	if pe.onProgress != nil {
 		pe.onProgress(msg)
 	}

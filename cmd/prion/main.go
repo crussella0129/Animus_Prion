@@ -129,10 +129,14 @@ func interactiveSession() error {
 
 		var response string
 		if planner.IsSimpleTask(input) {
+			fmt.Println("  Thinking...")
 			response, err = ag.Run(input)
 		} else {
 			pe := planner.NewPlanExecutor(e.provider, e.registry, e.workspace)
-			pe.SetProgress(func(msg string) { fmt.Printf("  %s\n", msg) })
+			pe.SetProgress(func(msg string) {
+				fmt.Fprintf(os.Stdout, "  %s\n", msg)
+				os.Stdout.Sync()
+			})
 			result, planErr := pe.Execute(input)
 			if planErr != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n\n", planErr)
