@@ -11,21 +11,21 @@
 
 ## Current Sprint — Security & Quality (from Code Review)
 
-### Tier 1: Security (CRITICAL) — Do First
-- [ ] Fix workspace boundary prefix collision (workspace.go:94,113) — append filepath.Separator
-- [ ] Add permission checking to all git tools (git.go) — deny-list + metachar enforcement
-- [ ] Fix workspace Contains() same prefix bug
+### Tier 1: Security (CRITICAL) — DONE
+- [x] Fix workspace boundary prefix collision (workspace.go:94,113)
+- [x] Add permission checking to all git tools (git.go)
+- [x] Fix workspace Contains() same prefix bug
 
-### Tier 2: Correctness (HIGH) — Do Next
-- [ ] Fix WriteFileTool blind \\n/\\t unescape (filesystem.go:176) — detect double-encoding
-- [ ] Fix SplitConjunctions case destruction (decomposer.go:76) — split on original, not lowered
-- [ ] Add exponential backoff for retryable errors (agent.go:92)
-- [ ] Add io.LimitReader for HTTP responses (api.go:135,283)
-- [ ] Escape SQL LIKE wildcards in GraphDB.SearchNodes (graphdb.go:181)
+### Tier 2: Correctness (HIGH) — DONE
+- [x] Fix WriteFileTool blind \\n/\\t unescape — detect double-encoding
+- [x] Fix SplitConjunctions case destruction — split on original text
+- [x] Add exponential backoff for retryable errors
+- [x] Add io.LimitReader for HTTP responses (10MB cap)
+- [x] Escape SQL LIKE wildcards in GraphDB.SearchNodes
 
-### Tier 3: Quality (MEDIUM) — Then These
+### Tier 3: Quality (MEDIUM)
 - [ ] Fix NativeProvider.Shutdown double-Wait race
-- [ ] Fix TrimMessages O(n^2) prepend → reverse approach
+- [ ] Fix TrimMessages O(n^2) prepend
 - [ ] Fix ChunkByFunction dead code path
 - [ ] Wire ConfirmDangerous config to permission.IsDangerous()
 - [ ] Add permission checking to ListFilesTool
@@ -33,12 +33,12 @@
 - [ ] Sort tool names in Registry.List() for deterministic ordering
 
 ### Tier 4: Architecture — Plan for v0.3
-- [ ] Thread context.Context through public APIs (agent.Run, planner.Execute, provider.Generate)
+- [ ] Thread context.Context through public APIs
 - [ ] Unify core.Message and llm.Message into single type
 - [ ] Add structured logging (slog)
 - [ ] Test coverage for: agent, llm, git tools, manifold, decomposer, retrieval executor, indexer
 
-## Backlog (from Engineering Recommendations)
+## Backlog
 - [ ] Round 3 benchmark with 14B model
 - [ ] Benchmark harness (`prion bench`)
 - [ ] MCP server mode (`prion serve`)
@@ -50,8 +50,7 @@
 - [x] Phase 0-12: Core framework — Entry #1-3
 - [x] Self-correction + Benchmarks R1/R2 — Entry #4
 - [x] 6 post-benchmark fixes — Entry #4
-- [x] CLI UX overhaul — Entry #5
-- [x] Native GGUF provider (subprocess) — Entry #5
-- [x] Code fixes (containsError, health URL, Available) — Entry #5
-- [x] Progress output + prompt engineering — Entry #5
-- [x] Full code review (30 issues) — Entry #5
+- [x] CLI UX + Native GGUF + Progress output — Entry #5
+- [x] Code review (30 issues) — Entry #5
+- [x] Tier 1 security fixes (workspace boundary, git permissions) — Entry #6
+- [x] Tier 2 correctness fixes (5 HIGH issues) — Entry #6
