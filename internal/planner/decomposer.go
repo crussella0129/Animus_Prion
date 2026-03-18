@@ -1,6 +1,7 @@
 package planner
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -50,7 +51,7 @@ Respond with numbered steps only. Example format:
 		{Role: "user", Content: prompt},
 	}
 
-	response, err := d.provider.Generate(messages, llm.GenerateOptions{
+	response, err := d.provider.Generate(context.Background(), messages, llm.GenerateOptions{
 		Temperature: 0.3, // Low temperature for structured output
 		MaxTokens:   512, // Plans should be concise
 	})

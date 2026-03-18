@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -127,8 +128,8 @@ func NewNativeProvider(cfg NativeProviderConfig) (*NativeProvider, error) {
 }
 
 // Generate delegates to the inner LocalProvider.
-func (p *NativeProvider) Generate(messages []Message, opts GenerateOptions) (string, error) {
-	return p.inner.Generate(messages, opts)
+func (p *NativeProvider) Generate(ctx context.Context, messages []Message, opts GenerateOptions) (string, error) {
+	return p.inner.Generate(ctx, messages, opts)
 }
 
 // Available returns true if the managed server is healthy.

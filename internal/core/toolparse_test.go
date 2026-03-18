@@ -85,7 +85,7 @@ func TestExtractBalancedJSON(t *testing.T) {
 }
 
 func TestDeduplicateToolCalls(t *testing.T) {
-	calls := []ToolCall{
+	calls := []ParsedToolCall{
 		{Name: "read_file", Arguments: map[string]interface{}{"path": "a.txt"}},
 		{Name: "read_file", Arguments: map[string]interface{}{"path": "a.txt"}},
 		{Name: "read_file", Arguments: map[string]interface{}{"path": "b.txt"}},

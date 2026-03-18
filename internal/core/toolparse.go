@@ -6,8 +6,9 @@ import (
 	"strings"
 )
 
-// ToolCall represents a parsed tool invocation from LLM output.
-type ToolCall struct {
+// ParsedToolCall represents a tool invocation extracted from LLM text output.
+// Distinct from core.ToolCall which is the OpenAI-format function call metadata.
+type ParsedToolCall struct {
 	Name      string                 `json:"name"`
 	Arguments map[string]interface{} `json:"arguments"`
 }
@@ -23,7 +24,7 @@ var inlineJSONPattern = regexp.MustCompile(`\{[^{}]*"name"\s*:\s*"[^"]+"\s*,\s*"
 //  1. Raw JSON (entire response is a single tool call)
 //  2. JSON code blocks (```json { ... } ```)
 //  3. Inline JSON objects with name + arguments
-func ParseToolCalls(text string) []ToolCall {
+func ParseToolCalls(text string) []ParsedToolCall {
 	text = strings.TrimSpace(text)
 	if len(text) == 0 {
 		return nil
@@ -31,18 +32,18 @@ func ParseToolCalls(text string) []ToolCall {
 
 	// Strategy 1: Raw JSON — entire response is a tool call
 	if strings.HasPrefix(text, "{") {
-		var tc ToolCall
+		var tc ParsedToolCall
 		if err := json.Unmarshal([]byte(text), &tc); err == nil && tc.Name != "" {
-			return []ToolCall{tc}
+			return []ParsedToolCall{tc}
 		}
 	}
 
 	// Strategy 2: JSON code blocks
 	matches := jsonBlockPattern.FindAllStringSubmatch(text, -1)
 	if len(matches) > 0 {
-		var calls []ToolCall
+		var calls []ParsedToolCall
 		for _, m := range matches {
-			var tc ToolCall
+			var tc ParsedToolCall
 			if err := json.Unmarshal([]byte(m[1]), &tc); err == nil && tc.Name != "" {
 				calls = append(calls, tc)
 			}
@@ -55,9 +56,9 @@ func ParseToolCalls(text string) []ToolCall {
 	// Strategy 3: Inline JSON (regex — may miss nested braces)
 	inlineMatches := inlineJSONPattern.FindAllString(text, -1)
 	if len(inlineMatches) > 0 {
-		var calls []ToolCall
+		var calls []ParsedToolCall
 		for _, m := range inlineMatches {
-			var tc ToolCall
+			var tc ParsedToolCall
 			if err := json.Unmarshal([]byte(m), &tc); err == nil && tc.Name != "" {
 				calls = append(calls, tc)
 			}
@@ -70,9 +71,9 @@ func ParseToolCalls(text string) []ToolCall {
 	// Strategy 4: Brace-counting extraction for nested JSON the regex missed
 	extracted := extractBalancedJSON(text)
 	if len(extracted) > 0 {
-		var calls []ToolCall
+		var calls []ParsedToolCall
 		for _, obj := range extracted {
-			var tc ToolCall
+			var tc ParsedToolCall
 			if err := json.Unmarshal([]byte(obj), &tc); err == nil && tc.Name != "" {
 				calls = append(calls, tc)
 			}
@@ -155,13 +156,13 @@ func extractBalancedJSON(text string) []string {
 
 // DeduplicateToolCalls removes duplicate tool calls within a single response.
 // Two calls are considered duplicates if they have the same name and arguments JSON.
-func DeduplicateToolCalls(calls []ToolCall) []ToolCall {
+func DeduplicateToolCalls(calls []ParsedToolCall) []ParsedToolCall {
 	if len(calls) <= 1 {
 		return calls
 	}
 
 	seen := make(map[string]bool)
-	var unique []ToolCall
+	var unique []ParsedToolCall
 
 	for _, tc := range calls {
 		key := tc.Name

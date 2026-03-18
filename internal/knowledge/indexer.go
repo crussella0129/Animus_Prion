@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io/fs"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -47,7 +47,7 @@ func (idx *Indexer) IndexAll() (int, error) {
 	indexed := 0
 	for _, path := range files {
 		if err := idx.indexFile(path); err != nil {
-			log.Printf("Warning: failed to index %s: %v", path, err)
+			slog.Warn("failed to index file", "path", path, "error", err)
 			continue
 		}
 		indexed++
@@ -85,7 +85,7 @@ func (idx *Indexer) IndexChanged() (int, error) {
 
 		// File is new or changed — re-index
 		if err := idx.indexFile(path); err != nil {
-			log.Printf("Warning: failed to re-index %s: %v", path, err)
+			slog.Warn("failed to re-index file", "path", path, "error", err)
 			continue
 		}
 

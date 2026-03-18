@@ -2,8 +2,9 @@
 package agent
 
 import (
+	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"runtime"
 	"strings"
 	"time"
@@ -65,8 +66,8 @@ func New(cfg Config) *Agent {
 }
 
 // Run executes the agentic loop for the given user input.
-// Returns the final assistant response.
-func (a *Agent) Run(input string) (string, error) {
+// Returns the final assistant response. Cancellable via context.
+func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 	a.history = append(a.history, core.NewUserMessage(input))
 
 	var lastResponse string
@@ -76,6 +77,11 @@ func (a *Agent) Run(input string) (string, error) {
 	repeatCount := 0
 
 	for turn := 0; turn < a.maxTurns; turn++ {
+		// Check for cancellation
+		if ctx.Err() != nil {
+			return lastResponse, ctx.Err()
+		}
+
 		// Trim history to fit context window
 		budget := a.contextWindow.ComputeBudget(core.EstimateTokens(a.systemPrompt, false))
 		a.history = core.TrimMessages(a.history, budget.HistoryTokens)
@@ -86,7 +92,7 @@ func (a *Agent) Run(input string) (string, error) {
 		}
 
 		// Generate response
-		response, err := a.step()
+		response, err := a.step(ctx)
 		if err != nil {
 			classified := core.ClassifyError(err)
 			if classified.Retryable && turn < a.maxTurns-1 {
@@ -95,7 +101,7 @@ func (a *Agent) Run(input string) (string, error) {
 				if backoff > 30*time.Second {
 					backoff = 30 * time.Second
 				}
-				log.Printf("Retryable error on turn %d, backing off %v: %v", turn, backoff, err)
+				slog.Warn("retryable error, backing off", "turn", turn, "backoff", backoff, "error", err)
 				time.Sleep(backoff)
 				continue
 			}
@@ -123,7 +129,7 @@ func (a *Agent) Run(input string) (string, error) {
 		if callKey == prevCallKey && prevCallSucceeded {
 			repeatCount++
 			if repeatCount >= 2 { // allow up to 3 identical successful calls before breaking
-				log.Printf("Repeat detected (turn %d, %d repeats), breaking loop", turn, repeatCount)
+				slog.Debug("repeat detected, breaking loop", "turn", turn, "repeats", repeatCount)
 				if lastToolResult != "" {
 					return lastToolResult, nil
 				}
@@ -166,16 +172,7 @@ func (a *Agent) Run(input string) (string, error) {
 }
 
 // step performs a single LLM generation call.
-func (a *Agent) step() (string, error) {
-	llmMessages := make([]llm.Message, len(a.history))
-	for i, m := range a.history {
-		llmMessages[i] = llm.Message{
-			Role:    m.Role,
-			Content: m.Content,
-			Name:    m.Name,
-		}
-	}
-
+func (a *Agent) step(ctx context.Context) (string, error) {
 	caps := a.provider.Capabilities()
 	schemas := a.registry.ToOpenAISchemas()
 	toolsAny := make([]any, len(schemas))
@@ -189,7 +186,7 @@ func (a *Agent) step() (string, error) {
 		Tools:       toolsAny,
 	}
 
-	return a.provider.Generate(llmMessages, opts)
+	return a.provider.Generate(ctx, a.history, opts)
 }
 
 // evaluateToolResult generates observation guidance for the model.

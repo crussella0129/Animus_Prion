@@ -4,6 +4,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"math/rand"
 	"os"
@@ -130,7 +131,7 @@ func interactiveSession() error {
 		var response string
 		if planner.IsSimpleTask(input) {
 			fmt.Println("  Thinking...")
-			response, err = ag.Run(input)
+			response, err = ag.Run(context.Background(), input)
 		} else {
 			pe := planner.NewPlanExecutor(e.provider, e.registry, e.workspace)
 			pe.SetProgress(func(msg string) {
@@ -193,7 +194,7 @@ func runCmd() *cobra.Command {
 					SizeTier:      e.cfg.Model.SizeTier,
 					ContextLength: e.cfg.Model.ContextLength,
 				})
-				response, err := ag.Run(task)
+				response, err := ag.Run(context.Background(), task)
 				if err != nil {
 					return err
 				}

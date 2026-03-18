@@ -2,6 +2,7 @@ package llm
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -98,7 +99,7 @@ type chatResponse struct {
 	} `json:"error"`
 }
 
-func (p *LocalProvider) Generate(messages []Message, opts GenerateOptions) (string, error) {
+func (p *LocalProvider) Generate(ctx context.Context, messages []Message, opts GenerateOptions) (string, error) {
 	reqBody := chatRequest{
 		Model:       p.model,
 		Messages:    messages,
@@ -117,7 +118,7 @@ func (p *LocalProvider) Generate(messages []Message, opts GenerateOptions) (stri
 		return "", fmt.Errorf("marshaling request: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", p.baseURL+"/chat/completions", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, "POST", p.baseURL+"/chat/completions", bytes.NewReader(body))
 	if err != nil {
 		return "", fmt.Errorf("creating request: %w", err)
 	}
@@ -228,7 +229,7 @@ type anthropicResponse struct {
 	} `json:"error"`
 }
 
-func (p *AnthropicProvider) Generate(messages []Message, opts GenerateOptions) (string, error) {
+func (p *AnthropicProvider) Generate(ctx context.Context, messages []Message, opts GenerateOptions) (string, error) {
 	var system string
 	var apiMessages []anthropicMessage
 
@@ -265,7 +266,7 @@ func (p *AnthropicProvider) Generate(messages []Message, opts GenerateOptions) (
 		return "", fmt.Errorf("marshaling request: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", "https://api.anthropic.com/v1/messages", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.anthropic.com/v1/messages", bytes.NewReader(body))
 	if err != nil {
 		return "", fmt.Errorf("creating request: %w", err)
 	}

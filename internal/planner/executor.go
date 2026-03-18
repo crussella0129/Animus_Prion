@@ -1,6 +1,7 @@
 package planner
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -94,7 +95,7 @@ func (e *ChunkedExecutor) ExecuteStep(step *Step, learnedContext string) StepRes
 		for i, s := range schemas {
 			toolsAny[i] = s
 		}
-		response, err := e.provider.Generate(messages, llm.GenerateOptions{
+		response, err := e.provider.Generate(context.Background(), messages, llm.GenerateOptions{
 			Temperature: 0.5,
 			MaxTokens:   2048,
 			Tools:       toolsAny,
