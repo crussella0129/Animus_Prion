@@ -10,7 +10,7 @@ type mockTool struct {
 }
 
 func (m *mockTool) Name() string        { return m.name }
-func (m *mockTool) Description() string  { return "A mock tool" }
+func (m *mockTool) Description() string { return "A mock tool" }
 func (m *mockTool) Parameters() ParameterSchema {
 	return ParameterSchema{
 		Type: "object",

@@ -97,8 +97,10 @@ type GitInitTool struct{ workspace *core.Workspace }
 
 func NewGitInitTool(ws *core.Workspace) *GitInitTool { return &GitInitTool{workspace: ws} }
 
-func (t *GitInitTool) Name() string        { return "git_init" }
-func (t *GitInitTool) Description() string  { return "Initialize a new git repository in the workspace." }
+func (t *GitInitTool) Name() string { return "git_init" }
+func (t *GitInitTool) Description() string {
+	return "Initialize a new git repository in the workspace."
+}
 func (t *GitInitTool) Parameters() ParameterSchema {
 	return ParameterSchema{Type: "object", Properties: map[string]ParameterSchema{}}
 }
@@ -113,7 +115,7 @@ type GitStatusTool struct{ workspace *core.Workspace }
 func NewGitStatusTool(ws *core.Workspace) *GitStatusTool { return &GitStatusTool{workspace: ws} }
 
 func (t *GitStatusTool) Name() string        { return "git_status" }
-func (t *GitStatusTool) Description() string  { return "Show the working tree status." }
+func (t *GitStatusTool) Description() string { return "Show the working tree status." }
 func (t *GitStatusTool) Parameters() ParameterSchema {
 	return ParameterSchema{Type: "object", Properties: map[string]ParameterSchema{}}
 }
@@ -128,7 +130,7 @@ type GitDiffTool struct{ workspace *core.Workspace }
 func NewGitDiffTool(ws *core.Workspace) *GitDiffTool { return &GitDiffTool{workspace: ws} }
 
 func (t *GitDiffTool) Name() string        { return "git_diff" }
-func (t *GitDiffTool) Description() string  { return "Show changes in the working directory." }
+func (t *GitDiffTool) Description() string { return "Show changes in the working directory." }
 func (t *GitDiffTool) Parameters() ParameterSchema {
 	return ParameterSchema{
 		Type: "object",
@@ -152,7 +154,7 @@ type GitLogTool struct{ workspace *core.Workspace }
 func NewGitLogTool(ws *core.Workspace) *GitLogTool { return &GitLogTool{workspace: ws} }
 
 func (t *GitLogTool) Name() string        { return "git_log" }
-func (t *GitLogTool) Description() string  { return "Show recent commit history." }
+func (t *GitLogTool) Description() string { return "Show recent commit history." }
 func (t *GitLogTool) Parameters() ParameterSchema {
 	return ParameterSchema{
 		Type: "object",
@@ -180,8 +182,10 @@ type GitAddTool struct{ workspace *core.Workspace }
 
 func NewGitAddTool(ws *core.Workspace) *GitAddTool { return &GitAddTool{workspace: ws} }
 
-func (t *GitAddTool) Name() string        { return "git_add" }
-func (t *GitAddTool) Description() string  { return "Stage specific files for commit. Do not use -A or . (too broad)." }
+func (t *GitAddTool) Name() string { return "git_add" }
+func (t *GitAddTool) Description() string {
+	return "Stage specific files for commit. Do not use -A or . (too broad)."
+}
 func (t *GitAddTool) Parameters() ParameterSchema {
 	return ParameterSchema{
 		Type: "object",
@@ -214,7 +218,7 @@ type GitCommitTool struct{ workspace *core.Workspace }
 func NewGitCommitTool(ws *core.Workspace) *GitCommitTool { return &GitCommitTool{workspace: ws} }
 
 func (t *GitCommitTool) Name() string        { return "git_commit" }
-func (t *GitCommitTool) Description() string  { return "Create a git commit with the given message." }
+func (t *GitCommitTool) Description() string { return "Create a git commit with the given message." }
 func (t *GitCommitTool) Parameters() ParameterSchema {
 	return ParameterSchema{
 		Type: "object",
@@ -239,7 +243,7 @@ type GitBranchTool struct{ workspace *core.Workspace }
 func NewGitBranchTool(ws *core.Workspace) *GitBranchTool { return &GitBranchTool{workspace: ws} }
 
 func (t *GitBranchTool) Name() string        { return "git_branch" }
-func (t *GitBranchTool) Description() string  { return "List or create branches." }
+func (t *GitBranchTool) Description() string { return "List or create branches." }
 func (t *GitBranchTool) Parameters() ParameterSchema {
 	return ParameterSchema{
 		Type: "object",
@@ -262,7 +266,7 @@ type GitCheckoutTool struct{ workspace *core.Workspace }
 func NewGitCheckoutTool(ws *core.Workspace) *GitCheckoutTool { return &GitCheckoutTool{workspace: ws} }
 
 func (t *GitCheckoutTool) Name() string        { return "git_checkout" }
-func (t *GitCheckoutTool) Description() string  { return "Switch to an existing branch." }
+func (t *GitCheckoutTool) Description() string { return "Switch to an existing branch." }
 func (t *GitCheckoutTool) Parameters() ParameterSchema {
 	return ParameterSchema{
 		Type: "object",

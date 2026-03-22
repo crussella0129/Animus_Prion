@@ -22,10 +22,10 @@ type Embedder interface {
 type Chunk struct {
 	ID        int64     `json:"id"`
 	Text      string    `json:"text"`
-	Source    string    `json:"source"`    // file path
+	Source    string    `json:"source"` // file path
 	StartLine int       `json:"start_line"`
 	EndLine   int       `json:"end_line"`
-	Embedding []float32 `json:"-"`         // not serialized to JSON
+	Embedding []float32 `json:"-"` // not serialized to JSON
 }
 
 // SearchHit is a chunk with its similarity score.

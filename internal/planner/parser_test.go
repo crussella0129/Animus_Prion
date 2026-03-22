@@ -58,13 +58,13 @@ func TestStepTypeInference(t *testing.T) {
 		desc     string
 		expected StepType
 	}{
-		{"Read the main.py file", StepWrite},     // .py extension takes priority
-		{"Examine the error logs", StepRead},     // keyword "examine"
-		{"Run go test ./...", StepShell},          // keyword "run"
-		{"Create a new handler.go", StepWrite},    // .go extension
-		{"Commit the changes", StepGit},           // keyword "commit"
-		{"Search for the bug", StepAnalyze},       // keyword "search"
-		{"Generate the report", StepGenerate},     // keyword "generate"
+		{"Read the main.py file", StepWrite},   // .py extension takes priority
+		{"Examine the error logs", StepRead},   // keyword "examine"
+		{"Run go test ./...", StepShell},       // keyword "run"
+		{"Create a new handler.go", StepWrite}, // .go extension
+		{"Commit the changes", StepGit},        // keyword "commit"
+		{"Search for the bug", StepAnalyze},    // keyword "search"
+		{"Generate the report", StepGenerate},  // keyword "generate"
 	}
 
 	for _, tt := range tests {

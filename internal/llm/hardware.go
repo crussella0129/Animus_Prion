@@ -30,8 +30,8 @@ type HardwareProfile struct {
 type InferenceBackend int
 
 const (
-	BackendBitNet    InferenceBackend = iota // CPU-optimized 1-bit inference
-	BackendLlamaCPP                          // GPU-accelerated GGUF inference
+	BackendBitNet   InferenceBackend = iota // CPU-optimized 1-bit inference
+	BackendLlamaCPP                         // GPU-accelerated GGUF inference
 )
 
 func (b InferenceBackend) String() string {

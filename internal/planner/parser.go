@@ -97,9 +97,9 @@ type Step struct {
 
 // StepResult holds the outcome of executing a single step.
 type StepResult struct {
-	Step    *Step
-	Output  string
-	Error   error
+	Step   *Step
+	Output string
+	Error  error
 }
 
 // PlanResult holds the outcome of executing an entire plan.

@@ -34,16 +34,16 @@ const (
 	EdgeCalls      EdgeKind = "calls"
 	EdgeImports    EdgeKind = "imports"
 	EdgeImplements EdgeKind = "implements"
-	EdgeContains   EdgeKind = "contains"  // package contains function
-	EdgeReceiver   EdgeKind = "receiver"  // method has receiver type
-	EdgeReturns    EdgeKind = "returns"   // function returns type
+	EdgeContains   EdgeKind = "contains" // package contains function
+	EdgeReceiver   EdgeKind = "receiver" // method has receiver type
+	EdgeReturns    EdgeKind = "returns"  // function returns type
 	EdgeReferences EdgeKind = "references"
 )
 
 // Node represents a code entity extracted from source.
 type Node struct {
-	ID        string   `json:"id"`         // unique: "pkg.Name" or "pkg.Type.Method"
-	Name      string   `json:"name"`       // short name
+	ID        string   `json:"id"`   // unique: "pkg.Name" or "pkg.Type.Method"
+	Name      string   `json:"name"` // short name
 	Kind      NodeKind `json:"kind"`
 	File      string   `json:"file"`       // source file path
 	Line      int      `json:"line"`       // line number

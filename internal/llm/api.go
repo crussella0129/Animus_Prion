@@ -15,11 +15,11 @@ import (
 // LocalProvider communicates with local LLM servers via OpenAI-compatible API.
 // Works with llama-server, vLLM, LM Studio, Ollama, and similar endpoints.
 type LocalProvider struct {
-	baseURL    string
-	apiKey     string
-	model      string
-	client     *http.Client
-	caps       ModelCapabilities
+	baseURL string
+	apiKey  string
+	model   string
+	client  *http.Client
+	caps    ModelCapabilities
 }
 
 // LocalProviderConfig holds configuration for the local provider.

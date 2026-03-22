@@ -139,23 +139,23 @@ func TestExtractExpectedFiles(t *testing.T) {
 		expected []string
 	}{
 		{
-			task: "Create Cargo.toml with cdylib crate-type and src/lib.rs that exposes functions. Also create main.py.",
+			task:     "Create Cargo.toml with cdylib crate-type and src/lib.rs that exposes functions. Also create main.py.",
 			expected: []string{"Cargo.toml", "src/lib.rs", "main.py"},
 		},
 		{
-			task: "Write a Python script called app.py",
+			task:     "Write a Python script called app.py",
 			expected: []string{"app.py"},
 		},
 		{
-			task: "Build a Rust library with cdylib",
+			task:     "Build a Rust library with cdylib",
 			expected: []string{"Cargo.toml"},
 		},
 		{
-			task: "Explain what fibonacci numbers are",
+			task:     "Explain what fibonacci numbers are",
 			expected: nil, // no file expectations
 		},
 		{
-			task: "Create handler.go and handler_test.go",
+			task:     "Create handler.go and handler_test.go",
 			expected: []string{"handler.go", "handler_test.go"},
 		},
 	}

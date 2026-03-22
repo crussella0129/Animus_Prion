@@ -76,9 +76,9 @@ func (s RecoveryStrategy) String() string {
 
 // ClassifiedError wraps an error with category and recovery information.
 type ClassifiedError struct {
-	Original error
-	Category ErrorCategory
-	Strategy RecoveryStrategy
+	Original  error
+	Category  ErrorCategory
+	Strategy  RecoveryStrategy
 	Retryable bool
 }
 

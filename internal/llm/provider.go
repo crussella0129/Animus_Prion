@@ -20,7 +20,7 @@ type FunctionCall = core.FunctionCall
 type ModelCapabilities struct {
 	ContextLength  int     `json:"context_length"`
 	ParameterCount float64 `json:"parameter_count_b"` // billions
-	SizeTier       string  `json:"size_tier"`          // "small", "medium", "large"
+	SizeTier       string  `json:"size_tier"`         // "small", "medium", "large"
 	SupportsTools  bool    `json:"supports_tools"`
 	SupportsJSON   bool    `json:"supports_json_mode"`
 }

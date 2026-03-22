@@ -7,10 +7,10 @@ import (
 
 // Result represents a single retrieval result.
 type Result struct {
-	Text     string   `json:"text"`
-	Score    float64  `json:"score"`
-	Source   string   `json:"source"` // file path
-	Strategy Strategy `json:"strategy"`
+	Text     string            `json:"text"`
+	Score    float64           `json:"score"`
+	Source   string            `json:"source"` // file path
+	Strategy Strategy          `json:"strategy"`
 	Metadata map[string]string `json:"metadata,omitempty"`
 }
 

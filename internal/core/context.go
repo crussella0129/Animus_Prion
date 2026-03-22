@@ -9,9 +9,9 @@ type ContextWindow struct {
 
 // TierRatios defines how context budget is allocated per tier.
 type TierRatios struct {
-	HistoryRatio  float64
-	OutputRatio   float64
-	ChunkRatio    float64
+	HistoryRatio float64
+	OutputRatio  float64
+	ChunkRatio   float64
 }
 
 // tierConfigs maps size tiers to their budget ratios.

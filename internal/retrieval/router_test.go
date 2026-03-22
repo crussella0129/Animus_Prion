@@ -80,8 +80,8 @@ func TestRouteHybridQueries(t *testing.T) {
 
 func TestRouteSymbolDetection(t *testing.T) {
 	tests := []struct {
-		query    string
-		symbol   string
+		query  string
+		symbol string
 	}{
 		{"who calls `authenticate`?", "authenticate"},
 		{"callers of handleRequest()", "handleRequest"},

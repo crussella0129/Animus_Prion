@@ -16,9 +16,9 @@ import (
 
 // ChunkedExecutor executes individual plan steps with fresh context.
 type ChunkedExecutor struct {
-	provider   llm.Provider
+	provider     llm.Provider
 	fullRegistry *tools.Registry
-	workspace  *core.Workspace
+	workspace    *core.Workspace
 	maxStepTurns int
 	maxToolCalls int
 }
@@ -532,16 +532,16 @@ func detectVerifyCommand(steps []Step, cwd string) string {
 var errorIndicators = []*regexp.Regexp{
 	regexp.MustCompile(`(?im)^error\b`),                 // line starts with "error"
 	regexp.MustCompile(`(?i)\berror\[E\d+\]`),           // Rust error codes: error[E0433]
-	regexp.MustCompile(`(?i)error:\s+`),                  // "error: message"
-	regexp.MustCompile(`(?i)\bfailed\b.*\bcompil`),       // "failed to compile"
-	regexp.MustCompile(`(?im)^Traceback`),                // Python traceback
-	regexp.MustCompile(`(?i)SyntaxError|CompileError`),   // specific error types
-	regexp.MustCompile(`(?i)could not compile`),          // Rust catch-all
+	regexp.MustCompile(`(?i)error:\s+`),                 // "error: message"
+	regexp.MustCompile(`(?i)\bfailed\b.*\bcompil`),      // "failed to compile"
+	regexp.MustCompile(`(?im)^Traceback`),               // Python traceback
+	regexp.MustCompile(`(?i)SyntaxError|CompileError`),  // specific error types
+	regexp.MustCompile(`(?i)could not compile`),         // Rust catch-all
 	regexp.MustCompile(`(?i)\b[1-9]\d*\s+errors?\b`),    // "1 error generated" (but not "0 errors")
-	regexp.MustCompile(`(?i)cannot find module`),         // Go module errors
-	regexp.MustCompile(`(?i)no such file or directory`),  // filesystem errors
-	regexp.MustCompile(`(?i)unresolved import`),          // Rust unresolved
-	regexp.MustCompile(`(?i)undefined reference`),        // linker errors
+	regexp.MustCompile(`(?i)cannot find module`),        // Go module errors
+	regexp.MustCompile(`(?i)no such file or directory`), // filesystem errors
+	regexp.MustCompile(`(?i)unresolved import`),         // Rust unresolved
+	regexp.MustCompile(`(?i)undefined reference`),       // linker errors
 }
 
 // zeroErrorsPattern matches "0 errors" which is a success indicator, not a failure.

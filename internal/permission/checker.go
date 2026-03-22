@@ -11,32 +11,32 @@ import (
 
 // DangerousDirectories that should never be accessed.
 var DangerousDirectories = map[string]bool{
-	"/etc":           true,
-	"/sys":           true,
-	"/proc":          true,
-	"/boot":          true,
-	"/dev":           true,
-	"/root":          true,
-	"C:\\Windows":    true,
-	"C:\\System32":   true,
+	"/etc":            true,
+	"/sys":            true,
+	"/proc":           true,
+	"/boot":           true,
+	"/dev":            true,
+	"/root":           true,
+	"C:\\Windows":     true,
+	"C:\\System32":    true,
 	"C:\\ProgramData": true,
 }
 
 // DangerousFiles that should never be read or written.
 var DangerousFiles = map[string]bool{
-	"/etc/passwd":        true,
-	"/etc/shadow":        true,
-	".ssh/id_rsa":        true,
-	".ssh/id_ed25519":    true,
+	"/etc/passwd":               true,
+	"/etc/shadow":               true,
+	".ssh/id_rsa":               true,
+	".ssh/id_ed25519":           true,
 	".animus_prion/config.yaml": true,
 }
 
 // BlockedCommands that are always denied.
 var BlockedCommands = map[string]bool{
-	"rm -rf /":    true,
-	"rm -rf /*":   true,
-	"mkfs":        true,
-	"dd":          true,
+	"rm -rf /":      true,
+	"rm -rf /*":     true,
+	"mkfs":          true,
+	"dd":            true,
 	":(){ :|:& };:": true, // fork bomb
 }
 

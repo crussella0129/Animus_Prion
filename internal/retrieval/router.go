@@ -65,8 +65,8 @@ var (
 	)
 
 	// Relationship patterns
-	callerPattern     = regexp.MustCompile(`(?i)who\s+calls|what\s+calls|callers?\s+of|called\s+by`)
-	calleePattern     = regexp.MustCompile(`(?i)what\s+does\s+\w+\s+call|callees?\s+of|calls\s+to`)
+	callerPattern      = regexp.MustCompile(`(?i)who\s+calls|what\s+calls|callers?\s+of|called\s+by`)
+	calleePattern      = regexp.MustCompile(`(?i)what\s+does\s+\w+\s+call|callees?\s+of|calls\s+to`)
 	blastRadiusPattern = regexp.MustCompile(`(?i)blast\s+radius|downstream|affected\s+by|impact\s+of`)
 	inheritancePattern = regexp.MustCompile(`(?i)subclass|inherits?\s+from|extends|implements|children\s+of|parent\s+of`)
 
@@ -74,7 +74,7 @@ var (
 	semanticPatterns = regexp.MustCompile(`(?i)\bhow\b|\bwhy\b|\bfind\b|\bimplement|\berror\b|\bbug\b|\bexplain\b|\bdescribe\b|\bunderstand\b`)
 
 	// Keyword patterns
-	todoPattern  = regexp.MustCompile(`(?i)\bTODO\b|\bFIXME\b|\bHACK\b|\bDEPRECATED\b|\bXXX\b`)
+	todoPattern   = regexp.MustCompile(`(?i)\bTODO\b|\bFIXME\b|\bHACK\b|\bDEPRECATED\b|\bXXX\b`)
 	quotedPattern = regexp.MustCompile(`"[^"]+"`)
 
 	// Hybrid indicators

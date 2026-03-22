@@ -4,9 +4,9 @@ package core
 // This is the single message type used throughout the codebase — both
 // the agent/planner layer and the LLM provider layer use the same struct.
 type Message struct {
-	Role       string     `json:"role"`                  // "system", "user", "assistant", "tool"
+	Role       string     `json:"role"` // "system", "user", "assistant", "tool"
 	Content    string     `json:"content"`
-	Name       string     `json:"name,omitempty"`        // tool name (for tool role)
+	Name       string     `json:"name,omitempty"`         // tool name (for tool role)
 	ToolCallID string     `json:"tool_call_id,omitempty"` // correlates tool results with calls
 	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`   // function calls from assistant
 }

@@ -14,13 +14,13 @@ func TestInjectionDetection(t *testing.T) {
 		{"ls -la", false},
 		{"echo hello", false},
 		{"cat file.txt", false},
-		{"echo $(whoami)", true},      // $() injection
-		{"echo `whoami`", true},       // backtick injection
-		{"ls; rm -rf /", true},        // semicolon chaining
-		{"ls && rm -rf /", true},      // && chaining
-		{"ls || rm -rf /", true},      // || chaining
+		{"echo $(whoami)", true},         // $() injection
+		{"echo `whoami`", true},          // backtick injection
+		{"ls; rm -rf /", true},           // semicolon chaining
+		{"ls && rm -rf /", true},         // && chaining
+		{"ls || rm -rf /", true},         // || chaining
 		{"cat file > /etc/passwd", true}, // redirect
-		{"cat file | grep x", true},   // pipe
+		{"cat file | grep x", true},      // pipe
 	}
 
 	for _, tt := range tests {
@@ -40,10 +40,10 @@ func TestCommandBlocking(t *testing.T) {
 	}{
 		{"ls -la", true},
 		{"python script.py", true},
-		{"rm -rf /", false},         // blocked
+		{"rm -rf /", false},                 // blocked
 		{"curl https://example.com", false}, // network blocked
-		{"wget file", false},        // network blocked
-		{"git push origin main", false}, // network blocked
+		{"wget file", false},                // network blocked
+		{"git push origin main", false},     // network blocked
 	}
 
 	for _, tt := range tests {

@@ -43,7 +43,7 @@ func (m *mockProvider) Generate(_ context.Context, _ []llm.Message, _ llm.Genera
 	return m.responses[idx], nil
 }
 
-func (m *mockProvider) Available() bool                    { return true }
+func (m *mockProvider) Available() bool                     { return true }
 func (m *mockProvider) Capabilities() llm.ModelCapabilities { return m.caps }
 
 // --- Mock Tool ---
