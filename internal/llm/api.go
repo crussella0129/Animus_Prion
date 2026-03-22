@@ -62,7 +62,14 @@ func NewLocalProvider(cfg LocalProviderConfig) *LocalProvider {
 
 func (p *LocalProvider) Available() bool {
 	healthURL := strings.TrimSuffix(p.baseURL, "/v1") + "/health"
-	resp, err := p.client.Get(healthURL)
+	// Use a short timeout for health checks — don't inherit the 300s client timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, "GET", healthURL, nil)
+	if err != nil {
+		return false
+	}
+	resp, err := p.client.Do(req)
 	if err != nil {
 		return false // server is not reachable
 	}
@@ -245,23 +252,7 @@ type anthropicResponse struct {
 }
 
 func (p *AnthropicProvider) Generate(ctx context.Context, messages []Message, opts GenerateOptions) (string, error) {
-	var system string
-	var apiMessages []anthropicMessage
-
-	for _, m := range messages {
-		if m.Role == "system" {
-			system = m.Content
-			continue
-		}
-		role := m.Role
-		if role == "tool" {
-			role = "user"
-		}
-		apiMessages = append(apiMessages, anthropicMessage{
-			Role:    role,
-			Content: m.Content,
-		})
-	}
+	system, apiMessages := prepareAnthropicMessages(messages)
 
 	maxTokens := opts.MaxTokens
 	if maxTokens == 0 {
@@ -322,6 +313,56 @@ func (p *AnthropicProvider) Generate(ctx context.Context, messages []Message, op
 	// Text blocks are passed through; tool_use blocks are converted to JSON
 	// that core.ParseToolCalls can parse (pragmatic integration — no agent loop changes).
 	return formatAnthropicResponse(result.Content), nil
+}
+
+// prepareAnthropicMessages extracts the system prompt and converts messages to
+// Anthropic format. Maps "tool" role to "user" and merges consecutive same-role
+// messages to satisfy the Anthropic API's strict alternation requirement.
+func prepareAnthropicMessages(messages []Message) (string, []anthropicMessage) {
+	var system string
+	var raw []anthropicMessage
+
+	for _, m := range messages {
+		if m.Role == "system" {
+			system = m.Content
+			continue
+		}
+		role := m.Role
+		if role == "tool" {
+			role = "user"
+		}
+		raw = append(raw, anthropicMessage{
+			Role:    role,
+			Content: m.Content,
+		})
+	}
+
+	return system, mergeConsecutiveMessages(raw)
+}
+
+// mergeConsecutiveMessages collapses adjacent messages with the same role.
+// Anthropic requires strict user/assistant alternation — consecutive same-role
+// messages (e.g., tool result + eval message both mapped to "user") are rejected.
+func mergeConsecutiveMessages(messages []anthropicMessage) []anthropicMessage {
+	if len(messages) <= 1 {
+		return messages
+	}
+
+	var merged []anthropicMessage
+	current := messages[0]
+
+	for i := 1; i < len(messages); i++ {
+		if messages[i].Role == current.Role {
+			// Same role — merge content with separator
+			current.Content += "\n\n" + messages[i].Content
+		} else {
+			merged = append(merged, current)
+			current = messages[i]
+		}
+	}
+	merged = append(merged, current)
+
+	return merged
 }
 
 // convertToAnthropicTools converts OpenAI-format tool schemas to Anthropic format.

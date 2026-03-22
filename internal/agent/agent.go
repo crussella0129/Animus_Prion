@@ -90,9 +90,13 @@ func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 		budget := a.contextWindow.ComputeBudget(core.EstimateTokens(a.systemPrompt, false))
 		a.history = core.TrimMessages(a.history, budget.HistoryTokens)
 
-		// Rate limiting: progressive sleep
+		// Rate limiting: progressive sleep (cancellable)
 		if turn > 0 {
-			time.Sleep(time.Duration(turn*100) * time.Millisecond)
+			select {
+			case <-time.After(time.Duration(turn*100) * time.Millisecond):
+			case <-ctx.Done():
+				return lastResponse, ctx.Err()
+			}
 		}
 
 		// Generate response
@@ -106,7 +110,11 @@ func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 					backoff = 30 * time.Second
 				}
 				slog.Warn("retryable error, backing off", "turn", turn, "backoff", backoff, "error", err)
-				time.Sleep(backoff)
+				select {
+				case <-time.After(backoff):
+				case <-ctx.Done():
+					return lastResponse, ctx.Err()
+				}
 				continue
 			}
 			if lastToolResult != "" {

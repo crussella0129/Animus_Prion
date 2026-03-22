@@ -143,6 +143,9 @@ func (e *ChunkedExecutor) ExecuteStep(ctx context.Context, step *Step, learnedCo
 				return StepResult{Step: step, Output: lastOutput}
 			}
 
+			// Execute against fullRegistry (not filtered) — intentional.
+			// The filtered registry is used for scope checking above, but execution
+			// uses the full registry to ensure tools have all dependencies wired up.
 			result, err := e.fullRegistry.Execute(tc.Name, tc.Arguments)
 			if err != nil {
 				errMsg := fmt.Sprintf("Error: %s — Do NOT retry this exact call.", err.Error())

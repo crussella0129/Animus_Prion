@@ -141,8 +141,9 @@ type anthropicStreamEvent struct {
 	Type  string `json:"type"`
 	Index int    `json:"index"`
 	Delta struct {
-		Type string `json:"type"` // "text_delta"
-		Text string `json:"text"`
+		Type        string `json:"type"`         // "text_delta" or "input_json_delta"
+		Text        string `json:"text"`         // for text_delta
+		PartialJSON string `json:"partial_json"` // for input_json_delta
 	} `json:"delta,omitempty"`
 	ContentBlock *struct {
 		Type  string                 `json:"type"` // "tool_use"
@@ -152,25 +153,16 @@ type anthropicStreamEvent struct {
 	} `json:"content_block,omitempty"`
 }
 
+// toolBlockAccumulator tracks tool_use blocks being built from streaming deltas.
+type toolBlockAccumulator struct {
+	ID       string
+	Name     string
+	InputBuf strings.Builder // accumulates input_json_delta fragments
+}
+
 // GenerateStream implements StreamProvider for AnthropicProvider.
 func (p *AnthropicProvider) GenerateStream(ctx context.Context, messages []Message, opts GenerateOptions, onChunk func(string)) (string, error) {
-	var system string
-	var apiMessages []anthropicMessage
-
-	for _, m := range messages {
-		if m.Role == "system" {
-			system = m.Content
-			continue
-		}
-		role := m.Role
-		if role == "tool" {
-			role = "user"
-		}
-		apiMessages = append(apiMessages, anthropicMessage{
-			Role:    role,
-			Content: m.Content,
-		})
-	}
+	system, apiMessages := prepareAnthropicMessages(messages)
 
 	maxTokens := opts.MaxTokens
 	if maxTokens == 0 {
@@ -220,11 +212,15 @@ func (p *AnthropicProvider) GenerateStream(ctx context.Context, messages []Messa
 // parseAnthropicSSE reads an Anthropic SSE stream.
 // Events use "event: <type>" and "data: {json}" lines.
 // Text arrives as content_block_delta events with text_delta type.
-// Tool use arrives as content_block_start with tool_use type, followed by input_json_delta.
+// Tool use arrives as content_block_start (name + ID), then input_json_delta
+// fragments during content_block_delta, finalized at content_block_stop.
 func parseAnthropicSSE(reader io.Reader, onChunk func(string)) (string, error) {
 	scanner := bufio.NewScanner(reader)
 	var full strings.Builder
 	var currentEvent string
+
+	// Track in-flight tool blocks by index
+	toolAccumulators := make(map[int]*toolBlockAccumulator)
 	var toolBlocks []anthropicContentBlock
 
 	for scanner.Scan() {
@@ -242,31 +238,62 @@ func parseAnthropicSSE(reader io.Reader, onChunk func(string)) (string, error) {
 		data := strings.TrimPrefix(line, "data: ")
 
 		switch currentEvent {
-		case "content_block_delta":
-			var event anthropicStreamEvent
-			if err := json.Unmarshal([]byte(data), &event); err != nil {
-				continue
-			}
-			if event.Delta.Type == "text_delta" && event.Delta.Text != "" {
-				full.WriteString(event.Delta.Text)
-				if onChunk != nil {
-					onChunk(event.Delta.Text)
-				}
-			}
-
 		case "content_block_start":
-			// Check if this is a tool_use block
 			var event anthropicStreamEvent
 			if err := json.Unmarshal([]byte(data), &event); err != nil {
 				continue
 			}
 			if event.ContentBlock != nil && event.ContentBlock.Type == "tool_use" {
+				toolAccumulators[event.Index] = &toolBlockAccumulator{
+					ID:   event.ContentBlock.ID,
+					Name: event.ContentBlock.Name,
+				}
+				// If input is already populated (small inputs), seed the buffer
+				if len(event.ContentBlock.Input) > 0 {
+					if raw, err := json.Marshal(event.ContentBlock.Input); err == nil {
+						toolAccumulators[event.Index].InputBuf.Write(raw)
+					}
+				}
+			}
+
+		case "content_block_delta":
+			var event anthropicStreamEvent
+			if err := json.Unmarshal([]byte(data), &event); err != nil {
+				continue
+			}
+			switch event.Delta.Type {
+			case "text_delta":
+				if event.Delta.Text != "" {
+					full.WriteString(event.Delta.Text)
+					if onChunk != nil {
+						onChunk(event.Delta.Text)
+					}
+				}
+			case "input_json_delta":
+				// Accumulate partial JSON for tool input
+				if acc, ok := toolAccumulators[event.Index]; ok {
+					acc.InputBuf.WriteString(event.Delta.PartialJSON)
+				}
+			}
+
+		case "content_block_stop":
+			var event anthropicStreamEvent
+			if err := json.Unmarshal([]byte(data), &event); err != nil {
+				continue
+			}
+			// Finalize tool block — parse accumulated JSON input
+			if acc, ok := toolAccumulators[event.Index]; ok {
+				var input map[string]interface{}
+				if accumulated := acc.InputBuf.String(); accumulated != "" {
+					json.Unmarshal([]byte(accumulated), &input)
+				}
 				toolBlocks = append(toolBlocks, anthropicContentBlock{
 					Type:  "tool_use",
-					ID:    event.ContentBlock.ID,
-					Name:  event.ContentBlock.Name,
-					Input: event.ContentBlock.Input,
+					ID:    acc.ID,
+					Name:  acc.Name,
+					Input: input,
 				})
+				delete(toolAccumulators, event.Index)
 			}
 
 		case "message_stop":

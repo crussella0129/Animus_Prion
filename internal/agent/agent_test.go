@@ -272,24 +272,21 @@ func TestMaxTurnsLimit(t *testing.T) {
 	registry := tools.NewRegistry()
 	registry.Register(mt)
 
-	ag := New(Config{
-		Provider:      newMockProvider("a", "b", "c", "d", "e"),
-		Registry:      registry,
-		SystemPrompt:  "test",
-		MaxTurns:      3,
-		SizeTier:      "medium",
-		ContextLength: 8192,
-	})
-
-	// All responses are plain text, so agent returns on first turn.
-	// But if we make them all tool calls:
 	provider := newMockProvider(
 		toolCallJSON("echo", `"input": "1"`),
 		toolCallJSON("echo", `"input": "2"`),
 		toolCallJSON("echo", `"input": "3"`),
 		toolCallJSON("echo", `"input": "4"`),
 	)
-	ag.provider = provider
+
+	ag := New(Config{
+		Provider:      provider,
+		Registry:      registry,
+		SystemPrompt:  "test",
+		MaxTurns:      3,
+		SizeTier:      "medium",
+		ContextLength: 8192,
+	})
 
 	_, err := ag.Run(context.Background(), "max turns test")
 	if err != nil {
