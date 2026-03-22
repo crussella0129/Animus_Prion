@@ -115,56 +115,70 @@ const MaxSteps = 7
 // stepPattern matches numbered steps like "1. Do something" or "Step 1: Do something"
 var stepPattern = regexp.MustCompile(`(?i)^\s*(?:step\s+)?(\d+)[.):\-]\s*(.+)$`)
 
+// stepPattern entry pairs a keyword/extension with a step type.
+type stepPatternEntry struct {
+	keyword  string
+	stepType StepType
+}
+
 // File extension patterns for step type inference (prioritized over keywords).
-var fileExtPatterns = map[string]StepType{
-	".py":   StepWrite,
-	".go":   StepWrite,
-	".js":   StepWrite,
-	".ts":   StepWrite,
-	".rs":   StepWrite,
-	".java": StepWrite,
-	".c":    StepWrite,
-	".cpp":  StepWrite,
-	".h":    StepWrite,
-	".md":   StepWrite,
-	".yaml": StepWrite,
-	".yml":  StepWrite,
-	".json": StepWrite,
-	".toml": StepWrite,
+// Ordered slice for deterministic matching (Go map iteration is randomized).
+var fileExtPatterns = []stepPatternEntry{
+	{".c", StepWrite},
+	{".cpp", StepWrite},
+	{".go", StepWrite},
+	{".h", StepWrite},
+	{".java", StepWrite},
+	{".js", StepWrite},
+	{".json", StepWrite},
+	{".md", StepWrite},
+	{".py", StepWrite},
+	{".rs", StepWrite},
+	{".toml", StepWrite},
+	{".ts", StepWrite},
+	{".yaml", StepWrite},
+	{".yml", StepWrite},
 }
 
 // Keyword patterns for step type inference.
-var keywordPatterns = map[string]StepType{
-	"read":      StepRead,
-	"examine":   StepRead,
-	"inspect":   StepRead,
-	"review":    StepRead,
-	"look at":   StepRead,
-	"check":     StepRead,
-	"write":     StepWrite,
-	"create":    StepWrite,
-	"modify":    StepWrite,
-	"update":    StepWrite,
-	"edit":      StepWrite,
-	"add":       StepWrite,
-	"implement": StepWrite,
-	"run":       StepShell,
-	"execute":   StepShell,
-	"test":      StepShell,
-	"install":   StepShell,
-	"build":     StepShell,
-	"compile":   StepShell,
-	"git":       StepGit,
-	"commit":    StepGit,
-	"branch":    StepGit,
-	"merge":     StepGit,
-	"analyze":   StepAnalyze,
-	"find":      StepAnalyze,
-	"search":    StepAnalyze,
-	"identify":  StepAnalyze,
-	"generate":  StepGenerate,
-	"produce":   StepGenerate,
-	"output":    StepGenerate,
+// Ordered by specificity: multi-word first, then alphabetical within each step type.
+var keywordPatterns = []stepPatternEntry{
+	// Read (check these first — "look at" is multi-word)
+	{"look at", StepRead},
+	{"check", StepRead},
+	{"examine", StepRead},
+	{"inspect", StepRead},
+	{"read", StepRead},
+	{"review", StepRead},
+	// Write
+	{"add", StepWrite},
+	{"create", StepWrite},
+	{"edit", StepWrite},
+	{"implement", StepWrite},
+	{"modify", StepWrite},
+	{"update", StepWrite},
+	{"write", StepWrite},
+	// Shell
+	{"build", StepShell},
+	{"compile", StepShell},
+	{"execute", StepShell},
+	{"install", StepShell},
+	{"run", StepShell},
+	{"test", StepShell},
+	// Git
+	{"branch", StepGit},
+	{"commit", StepGit},
+	{"git", StepGit},
+	{"merge", StepGit},
+	// Analyze
+	{"analyze", StepAnalyze},
+	{"find", StepAnalyze},
+	{"identify", StepAnalyze},
+	{"search", StepAnalyze},
+	// Generate
+	{"generate", StepGenerate},
+	{"output", StepGenerate},
+	{"produce", StepGenerate},
 }
 
 // ParsePlan extracts steps from raw LLM plan text.
@@ -200,20 +214,21 @@ func ParsePlan(text string) []Step {
 
 // inferStepType determines the step type from its description.
 // File extensions are checked first (higher priority), then keywords.
+// Both pattern lists are ordered slices for deterministic matching.
 func inferStepType(description string) StepType {
 	lower := strings.ToLower(description)
 
 	// Priority 1: File extension patterns
-	for ext, st := range fileExtPatterns {
-		if strings.Contains(lower, ext) {
-			return st
+	for _, p := range fileExtPatterns {
+		if strings.Contains(lower, p.keyword) {
+			return p.stepType
 		}
 	}
 
 	// Priority 2: Keyword patterns
-	for keyword, st := range keywordPatterns {
-		if strings.Contains(lower, keyword) {
-			return st
+	for _, p := range keywordPatterns {
+		if strings.Contains(lower, p.keyword) {
+			return p.stepType
 		}
 	}
 

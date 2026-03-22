@@ -15,6 +15,9 @@ import (
 )
 
 // Agent is the core agentic loop that orchestrates LLM generation and tool execution.
+// Agent is NOT safe for concurrent use — Run must not be called from multiple goroutines.
+// The REPL is single-threaded, so this is fine. If concurrent agents are needed in the
+// future, protect the history slice with a sync.Mutex.
 type Agent struct {
 	provider      llm.Provider
 	registry      *tools.Registry

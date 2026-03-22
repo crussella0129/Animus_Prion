@@ -37,13 +37,13 @@
 - [x] Propagate context.Context through planner (Decompose, ExecuteStep, Execute)
 - [x] Write agent package tests (15 tests: repeat detection, trimming, error recovery, cancellation)
 
-## Backlog (P1 — from 2026-03-22 review)
-- [ ] Use errors.As instead of type assertion in IsRetryable
-- [ ] Use sync.RWMutex for read-only methods (ExecutionBudget.Remaining, writeLog.Entries)
-- [ ] Add Anthropic native tool calling (send tools field in API request)
-- [ ] Make inferStepType deterministic (sorted slice instead of map)
-- [ ] Inject write log instead of global
-- [ ] Protect Agent.history with mutex or document non-concurrent
+### Code Review P1 Fixes (2026-03-22) — DONE
+- [x] Use errors.As instead of type assertion in IsRetryable
+- [x] Use sync.RWMutex for read-only methods (ExecutionBudget.Remaining, writeLog.Entries)
+- [x] Add Anthropic native tool calling (tools in request, tool_use parsing in response)
+- [x] Make inferStepType deterministic (sorted slices instead of maps)
+- [x] Inject write log instead of global (defaultWriteLog + NewWriteFileToolWithLog)
+- [x] Document Agent.history as non-concurrent (YAGNI — REPL is single-threaded)
 
 ## Backlog (P2+)
 - [ ] Round 3 benchmark with 14B model
@@ -65,3 +65,4 @@
 - [x] Code review (30 issues found)
 - [x] Tiers 1-4: 22 issues fixed, 108 tests
 - [x] Code Review P0: 4 bugs fixed, 129 tests
+- [x] Code Review P1: 6 issues fixed, 134 tests

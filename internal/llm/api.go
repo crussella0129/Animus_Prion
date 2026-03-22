@@ -210,6 +210,7 @@ type anthropicRequest struct {
 	MaxTokens   int                `json:"max_tokens"`
 	System      string             `json:"system,omitempty"`
 	Messages    []anthropicMessage `json:"messages"`
+	Tools       []anthropicTool    `json:"tools,omitempty"`
 	Temperature float64            `json:"temperature,omitempty"`
 }
 
@@ -218,15 +219,29 @@ type anthropicMessage struct {
 	Content string `json:"content"`
 }
 
+// anthropicTool is the Anthropic Messages API tool definition format.
+type anthropicTool struct {
+	Name        string      `json:"name"`
+	Description string      `json:"description"`
+	InputSchema interface{} `json:"input_schema"`
+}
+
+// anthropicContentBlock represents a content block in the response (text or tool_use).
+type anthropicContentBlock struct {
+	Type  string                 `json:"type"`            // "text" or "tool_use"
+	Text  string                 `json:"text,omitempty"`  // for type "text"
+	ID    string                 `json:"id,omitempty"`    // for type "tool_use"
+	Name  string                 `json:"name,omitempty"`  // for type "tool_use"
+	Input map[string]interface{} `json:"input,omitempty"` // for type "tool_use"
+}
+
 type anthropicResponse struct {
-	Content []struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
-	} `json:"content"`
-	Error *struct {
+	Content []anthropicContentBlock `json:"content"`
+	Error   *struct {
 		Type    string `json:"type"`
 		Message string `json:"message"`
 	} `json:"error"`
+	StopReason string `json:"stop_reason"` // "end_turn", "tool_use", etc.
 }
 
 func (p *AnthropicProvider) Generate(ctx context.Context, messages []Message, opts GenerateOptions) (string, error) {
@@ -259,6 +274,11 @@ func (p *AnthropicProvider) Generate(ctx context.Context, messages []Message, op
 		System:      system,
 		Messages:    apiMessages,
 		Temperature: opts.Temperature,
+	}
+
+	// Convert OpenAI-format tool schemas to Anthropic format
+	if len(opts.Tools) > 0 {
+		reqBody.Tools = convertToAnthropicTools(opts.Tools)
 	}
 
 	body, err := json.Marshal(reqBody)
@@ -298,5 +318,67 @@ func (p *AnthropicProvider) Generate(ctx context.Context, messages []Message, op
 		return "", fmt.Errorf("no content in response")
 	}
 
-	return result.Content[0].Text, nil
+	// Build response text from content blocks.
+	// Text blocks are passed through; tool_use blocks are converted to JSON
+	// that core.ParseToolCalls can parse (pragmatic integration — no agent loop changes).
+	return formatAnthropicResponse(result.Content), nil
+}
+
+// convertToAnthropicTools converts OpenAI-format tool schemas to Anthropic format.
+// OpenAI: {"type": "function", "function": {"name", "description", "parameters"}}
+// Anthropic: {"name", "description", "input_schema"}
+func convertToAnthropicTools(openaiTools []any) []anthropicTool {
+	var tools []anthropicTool
+	for _, t := range openaiTools {
+		// The tools are OpenAISchema structs serialized as any
+		raw, err := json.Marshal(t)
+		if err != nil {
+			continue
+		}
+		var schema struct {
+			Type     string `json:"type"`
+			Function struct {
+				Name        string      `json:"name"`
+				Description string      `json:"description"`
+				Parameters  interface{} `json:"parameters"`
+			} `json:"function"`
+		}
+		if err := json.Unmarshal(raw, &schema); err != nil {
+			continue
+		}
+		if schema.Function.Name == "" {
+			continue
+		}
+		tools = append(tools, anthropicTool{
+			Name:        schema.Function.Name,
+			Description: schema.Function.Description,
+			InputSchema: schema.Function.Parameters,
+		})
+	}
+	return tools
+}
+
+// formatAnthropicResponse converts Anthropic content blocks to text.
+// Text blocks are concatenated. Tool_use blocks are serialized as JSON
+// in the format that core.ParseToolCalls expects: {"name": "...", "arguments": {...}}
+func formatAnthropicResponse(blocks []anthropicContentBlock) string {
+	var parts []string
+	for _, block := range blocks {
+		switch block.Type {
+		case "text":
+			if block.Text != "" {
+				parts = append(parts, block.Text)
+			}
+		case "tool_use":
+			// Convert to the JSON format the agent's ParseToolCalls expects
+			call := map[string]interface{}{
+				"name":      block.Name,
+				"arguments": block.Input,
+			}
+			if b, err := json.Marshal(call); err == nil {
+				parts = append(parts, string(b))
+			}
+		}
+	}
+	return strings.Join(parts, "\n")
 }

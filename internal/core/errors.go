@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -132,8 +133,10 @@ func ClassifyError(err error) *ClassifiedError {
 }
 
 // IsRetryable checks whether a classified error can be retried.
+// Uses errors.As to unwrap error chains (handles wrapped ClassifiedErrors).
 func IsRetryable(err error) bool {
-	if ce, ok := err.(*ClassifiedError); ok {
+	var ce *ClassifiedError
+	if errors.As(err, &ce) {
 		return ce.Retryable
 	}
 	// Check the error message for common retryable patterns

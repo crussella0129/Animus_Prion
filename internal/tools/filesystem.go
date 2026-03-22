@@ -21,7 +21,7 @@ type WriteLogEntry struct {
 
 // writeLog provides thread-safe audit logging for file writes.
 type writeLog struct {
-	mu      sync.Mutex
+	mu      sync.RWMutex
 	entries []WriteLogEntry
 }
 
@@ -32,18 +32,19 @@ func (l *writeLog) Add(entry WriteLogEntry) {
 }
 
 func (l *writeLog) Entries() []WriteLogEntry {
-	l.mu.Lock()
-	defer l.mu.Unlock()
+	l.mu.RLock()
+	defer l.mu.RUnlock()
 	result := make([]WriteLogEntry, len(l.entries))
 	copy(result, l.entries)
 	return result
 }
 
-var globalWriteLog = &writeLog{}
+// defaultWriteLog is the package-level write log used when no custom log is injected.
+var defaultWriteLog = &writeLog{}
 
-// GetWriteLog returns all file write audit entries.
+// GetWriteLog returns all file write audit entries from the default log.
 func GetWriteLog() []WriteLogEntry {
-	return globalWriteLog.Entries()
+	return defaultWriteLog.Entries()
 }
 
 // --- ReadFileTool ---
@@ -127,10 +128,17 @@ func (t *ReadFileTool) Execute(args map[string]interface{}) (string, error) {
 type WriteFileTool struct {
 	workspace *core.Workspace
 	checker   *permission.Checker
+	log       *writeLog
 }
 
+// NewWriteFileTool creates a write tool using the default package-level audit log.
 func NewWriteFileTool(ws *core.Workspace, checker *permission.Checker) *WriteFileTool {
-	return &WriteFileTool{workspace: ws, checker: checker}
+	return &WriteFileTool{workspace: ws, checker: checker, log: defaultWriteLog}
+}
+
+// NewWriteFileToolWithLog creates a write tool with an injected audit log (for testing).
+func NewWriteFileToolWithLog(ws *core.Workspace, checker *permission.Checker, log *writeLog) *WriteFileTool {
+	return &WriteFileTool{workspace: ws, checker: checker, log: log}
 }
 
 func (t *WriteFileTool) Name() string { return "write_file" }
@@ -192,7 +200,7 @@ func (t *WriteFileTool) Execute(args map[string]interface{}) (string, error) {
 	}
 
 	// Audit log
-	globalWriteLog.Add(WriteLogEntry{
+	t.log.Add(WriteLogEntry{
 		Path:      resolved,
 		Timestamp: time.Now(),
 		Size:      len(content),

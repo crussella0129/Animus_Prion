@@ -15,7 +15,7 @@ import (
 
 // ExecutionBudget tracks cumulative execution time for safety.
 type ExecutionBudget struct {
-	mu       sync.Mutex
+	mu       sync.RWMutex
 	limit    time.Duration
 	consumed time.Duration
 }
@@ -27,8 +27,8 @@ func NewExecutionBudget(limit time.Duration) *ExecutionBudget {
 
 // Remaining returns how much budget is left.
 func (b *ExecutionBudget) Remaining() time.Duration {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	b.mu.RLock()
+	defer b.mu.RUnlock()
 	r := b.limit - b.consumed
 	if r < 0 {
 		return 0

@@ -341,3 +341,41 @@ None blocking.
 
 ### Next
 - P1 fixes: errors.As, RWMutex, Anthropic tool calling, deterministic inferStepType, inject write log, Agent.history mutex
+
+---
+
+## Entry #8 — 2026-03-22
+
+### Summary
+Code review P1 fixes: 6 issues resolved, 5 new Anthropic tool tests added. 134 tests passing.
+
+### Actions
+- Used errors.As in IsRetryable for proper wrapped error chain unwrapping
+- Switched ExecutionBudget.Remaining() and writeLog.Entries() to sync.RWMutex with RLock
+- Added Anthropic native tool calling: tools sent in API request, tool_use content blocks parsed and converted to JSON for ParseToolCalls
+- Made inferStepType deterministic: converted fileExtPatterns and keywordPatterns from maps to ordered slices of stepPatternEntry structs
+- Injected write log: WriteFileTool now holds a *writeLog field (defaults to defaultWriteLog), added NewWriteFileToolWithLog for testing
+- Documented Agent as non-concurrent (YAGNI — REPL is single-threaded)
+
+### Files Changed
+- `internal/core/errors.go` — errors.As in IsRetryable
+- `internal/tools/shell.go` — sync.RWMutex for ExecutionBudget
+- `internal/tools/filesystem.go` — sync.RWMutex for writeLog, injected log field, NewWriteFileToolWithLog
+- `internal/llm/api.go` — Anthropic tool calling (convertToAnthropicTools, formatAnthropicResponse, anthropicTool/anthropicContentBlock types)
+- `internal/llm/provider_test.go` — 5 new tests (tool conversion, response formatting, capabilities)
+- `internal/planner/parser.go` — stepPatternEntry struct, ordered slices, updated inferStepType
+- `internal/agent/agent.go` — concurrency safety documentation
+
+### Findings
+- Anthropic tool format is flatter than OpenAI (no function wrapper), conversion is straightforward
+- Pragmatic approach: convert tool_use blocks back to JSON text for ParseToolCalls — gets quality benefit without agent loop refactor
+- keywords sorted by specificity within step type groups (multi-word "look at" before single-word)
+
+### Issues
+None blocking.
+
+### Checkpoint
+**Status:** CONTINUE — P0+P1 complete. P2+ backlog remains.
+
+### Next
+- P2+ backlog items (streaming, AMD GPU, HNSW, CI/CD, etc.)
