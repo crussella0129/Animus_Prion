@@ -292,3 +292,52 @@ Engineering overhaul session: implemented native GGUF provider (subprocess), fix
 - Add context.Context to public APIs
 - Backoff on retryable errors
 - Test coverage for critical packages
+
+---
+
+## Entry #6 — 2026-03-17
+
+### Summary
+Tiers 1-4 code review fixes: 22 issues resolved across security, correctness, quality, and architecture. All 4 tiers complete. 108 tests passing across 19 test files.
+
+### Checkpoint
+**Status:** CONTINUE — All tiers done.
+
+---
+
+## Entry #7 — 2026-03-22
+
+### Summary
+External code review P0 fixes: 4 bugs fixed, 15 agent tests added. 129 tests passing.
+
+### Actions
+- Fixed TrimMessages negative budget: clamped to zero when system prompt exceeds maxTokens, returns system + last message
+- Fixed repeat detection: hash ALL tool calls into the key, not just toolCalls[0] — prevents multi-tool loop evasion
+- Propagated context.Context through planner: Decompose, ExecuteStep, Execute, checkCompleteness, verifyAndRepair all accept ctx now. Ctrl+C cancels LLM calls during plan execution
+- Created agent_test.go: 15 tests covering Run flow, tool execution, repeat detection (single + multi-tool), context cancellation, error recovery (retryable + non-retryable), evaluateToolResult, context trimming, history growth, Reset
+
+### Files Changed
+- `internal/core/context.go` — TrimMessages negative budget fix
+- `internal/agent/agent.go` — Repeat detection hashes all tool calls
+- `internal/planner/decomposer.go` — Decompose accepts context.Context
+- `internal/planner/executor.go` — ExecuteStep, Execute, checkCompleteness, verifyAndRepair accept context.Context
+- `internal/agent/agent_test.go` — NEW: 15 agent tests
+- `cmd/prion/main.go` — Updated callers to pass context.Background() to planner
+- `LLM_GECK/tasks.md` — Updated with P0 done, P1 backlog items
+
+### Commits
+- (pending)
+
+### Findings
+- Review item 2.1 (go.mod version) was INVALID — Go 1.26.1 is the actual installed version
+- Review item 2.7 (math/rand seed) was INVALID — Go 1.26.1 auto-seeds since Go 1.20
+- 8 of 22 review items verified as real bugs, 2 rejected, remainder deferred to P1/P2
+
+### Issues
+None blocking.
+
+### Checkpoint
+**Status:** CONTINUE — P0 fixes complete. P1 backlog documented in tasks.md.
+
+### Next
+- P1 fixes: errors.As, RWMutex, Anthropic tool calling, deterministic inferStepType, inject write log, Agent.history mutex

@@ -1,6 +1,6 @@
 # Tasks — Animus_Prion
 
-**Last Updated:** 2026-03-17
+**Last Updated:** 2026-03-22
 
 ## All Tiers Complete
 
@@ -31,13 +31,31 @@
 - [x] Structured logging with log/slog
 - [x] Test coverage: llm, retrieval executor, chunker (108 tests, 19 files)
 
-## Backlog
+### Code Review P0 Fixes (2026-03-22) — DONE
+- [x] Fix TrimMessages negative budget (system prompt > maxTokens edge case)
+- [x] Fix repeat detection to hash all tool calls (not just first)
+- [x] Propagate context.Context through planner (Decompose, ExecuteStep, Execute)
+- [x] Write agent package tests (15 tests: repeat detection, trimming, error recovery, cancellation)
+
+## Backlog (P1 — from 2026-03-22 review)
+- [ ] Use errors.As instead of type assertion in IsRetryable
+- [ ] Use sync.RWMutex for read-only methods (ExecutionBudget.Remaining, writeLog.Entries)
+- [ ] Add Anthropic native tool calling (send tools field in API request)
+- [ ] Make inferStepType deterministic (sorted slice instead of map)
+- [ ] Inject write log instead of global
+- [ ] Protect Agent.history with mutex or document non-concurrent
+
+## Backlog (P2+)
 - [ ] Round 3 benchmark with 14B model
 - [ ] Benchmark harness (`prion bench`)
 - [ ] MCP server mode (`prion serve`)
 - [ ] GBNF grammar constraints
 - [ ] Tree-sitter multi-language parsing
 - [ ] CI/CD with GitHub Actions
+- [ ] Add streaming (StreamProvider implementations)
+- [ ] Add AMD GPU detection (rocm-smi)
+- [ ] Add `prion setup` command
+- [ ] Consider HNSW for vector store >10k chunks
 
 ## Completed
 - [x] Phase 0-12: Core framework
@@ -46,3 +64,4 @@
 - [x] CLI UX + Native GGUF + Progress output
 - [x] Code review (30 issues found)
 - [x] Tiers 1-4: 22 issues fixed, 108 tests
+- [x] Code Review P0: 4 bugs fixed, 129 tests

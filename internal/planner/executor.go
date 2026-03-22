@@ -48,7 +48,7 @@ func NewChunkedExecutor(provider llm.Provider, registry *tools.Registry, ws *cor
 }
 
 // ExecuteStep runs a single plan step with filtered tools and scope enforcement.
-func (e *ChunkedExecutor) ExecuteStep(step *Step, learnedContext string) StepResult {
+func (e *ChunkedExecutor) ExecuteStep(ctx context.Context, step *Step, learnedContext string) StepResult {
 	step.Status = StatusRunning
 
 	// Filter tools to only those allowed for this step type
@@ -95,7 +95,7 @@ func (e *ChunkedExecutor) ExecuteStep(step *Step, learnedContext string) StepRes
 		for i, s := range schemas {
 			toolsAny[i] = s
 		}
-		response, err := e.provider.Generate(context.Background(), messages, llm.GenerateOptions{
+		response, err := e.provider.Generate(ctx, messages, llm.GenerateOptions{
 			Temperature: 0.5,
 			MaxTokens:   2048,
 			Tools:       toolsAny,
@@ -222,12 +222,12 @@ func (pe *PlanExecutor) progress(format string, args ...interface{}) {
 }
 
 // Execute runs the full plan-then-execute pipeline.
-func (pe *PlanExecutor) Execute(task string) (PlanResult, error) {
+func (pe *PlanExecutor) Execute(ctx context.Context, task string) (PlanResult, error) {
 	// Skip planning for simple tasks
 	if IsSimpleTask(task) {
 		pe.progress("Executing directly...")
 		step := Step{Number: 1, Description: task, Type: inferStepType(task), Status: StatusPending}
-		result := pe.executor.ExecuteStep(&step, "")
+		result := pe.executor.ExecuteStep(ctx, &step, "")
 		return PlanResult{
 			Steps:   []StepResult{result},
 			Success: result.Error == nil,
@@ -237,7 +237,7 @@ func (pe *PlanExecutor) Execute(task string) (PlanResult, error) {
 
 	// Decompose task into steps
 	pe.progress("Planning...")
-	steps, err := pe.decomposer.Decompose(task, pe.workspace.CWD())
+	steps, err := pe.decomposer.Decompose(ctx, task, pe.workspace.CWD())
 	if err != nil {
 		return PlanResult{}, fmt.Errorf("planning failed: %w", err)
 	}
@@ -265,7 +265,7 @@ func (pe *PlanExecutor) Execute(task string) (PlanResult, error) {
 	for i := range steps {
 		pe.progress("  [%d/%d] %s", steps[i].Number, len(steps), steps[i].Description)
 
-		result := pe.executor.ExecuteStep(&steps[i], learnedContext.String())
+		result := pe.executor.ExecuteStep(ctx, &steps[i], learnedContext.String())
 		results = append(results, PlanResult{
 			Steps:   []StepResult{result},
 			Success: result.Error == nil,
@@ -282,7 +282,7 @@ func (pe *PlanExecutor) Execute(task string) (PlanResult, error) {
 	// --- Requirements Completeness Check ---
 	// Extract expected files from the original task and verify each exists.
 	// If any are missing, inject steps to create them before verification.
-	missingResults := pe.checkCompleteness(task, steps, &learnedContext)
+	missingResults := pe.checkCompleteness(ctx, task, steps, &learnedContext)
 	results = append(results, missingResults...)
 
 	// --- Verify-and-Repair Loop ---
@@ -295,7 +295,7 @@ func (pe *PlanExecutor) Execute(task string) (PlanResult, error) {
 			allSteps = append(allSteps, *sr.Step)
 		}
 	}
-	verifyResults := pe.verifyAndRepair(allSteps, &learnedContext)
+	verifyResults := pe.verifyAndRepair(ctx, allSteps, &learnedContext)
 	results = append(results, verifyResults...)
 
 	// Build combined result
@@ -322,7 +322,7 @@ func (pe *PlanExecutor) Execute(task string) (PlanResult, error) {
 
 // checkCompleteness extracts expected deliverables from the task prompt,
 // checks which ones exist in the workspace, and creates steps for any missing ones.
-func (pe *PlanExecutor) checkCompleteness(task string, steps []Step, learnedContext *strings.Builder) []PlanResult {
+func (pe *PlanExecutor) checkCompleteness(ctx context.Context, task string, steps []Step, learnedContext *strings.Builder) []PlanResult {
 	expected := extractExpectedFiles(task)
 	if len(expected) == 0 {
 		return nil
@@ -354,7 +354,7 @@ func (pe *PlanExecutor) checkCompleteness(task string, steps []Step, learnedCont
 		Status:      StatusPending,
 	}
 
-	fillResult := pe.executor.ExecuteStep(&fillStep, learnedContext.String()+
+	fillResult := pe.executor.ExecuteStep(ctx, &fillStep, learnedContext.String()+
 		fmt.Sprintf("\nThe following files were requested but not yet created: %s\n"+
 			"Original task: %s\n"+
 			"Create these missing files now, using the context from previous steps.\n",
@@ -404,7 +404,7 @@ func extractExpectedFiles(task string) []string {
 // verifyAndRepair checks if code was written and runs verification commands.
 // If verification fails, it creates a repair step with the error output.
 // Returns additional PlanResults from verify/repair steps.
-func (pe *PlanExecutor) verifyAndRepair(steps []Step, learnedContext *strings.Builder) []PlanResult {
+func (pe *PlanExecutor) verifyAndRepair(ctx context.Context, steps []Step, learnedContext *strings.Builder) []PlanResult {
 	var results []PlanResult
 
 	// Detect what was written by looking at step types and descriptions
@@ -423,7 +423,7 @@ func (pe *PlanExecutor) verifyAndRepair(steps []Step, learnedContext *strings.Bu
 		Status:      StatusPending,
 	}
 
-	verifyResult := pe.executor.ExecuteStep(&verifyStep, learnedContext.String()+
+	verifyResult := pe.executor.ExecuteStep(ctx, &verifyStep, learnedContext.String()+
 		fmt.Sprintf("\nRun this command to verify the code: %s\nIf it fails, do NOT fix anything — just report the error.\n", verifyCmd))
 
 	results = append(results, PlanResult{
@@ -449,7 +449,7 @@ func (pe *PlanExecutor) verifyAndRepair(steps []Step, learnedContext *strings.Bu
 			Status:      StatusPending,
 		}
 
-		repairResult := pe.executor.ExecuteStep(&repairStep, learnedContext.String()+
+		repairResult := pe.executor.ExecuteStep(ctx, &repairStep, learnedContext.String()+
 			"\nThe code failed verification. Read the error above and fix the source files. "+
 			"Then re-run the verification command to confirm the fix.\n")
 

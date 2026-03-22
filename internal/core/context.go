@@ -95,6 +95,12 @@ func TrimMessages(messages []Message, maxTokens int) []Message {
 	remaining := messages[1:]
 	budget := maxTokens - EstimateTokens(messages[0].Content, false) - 4
 
+	// If the system prompt alone exceeds the budget, return system + last message only
+	if budget <= 0 {
+		result = append(result, remaining[len(remaining)-1])
+		return result
+	}
+
 	// Find the cutoff index (oldest message to keep)
 	cutoff := len(remaining)
 	for i := len(remaining) - 1; i >= 0; i-- {

@@ -24,7 +24,7 @@ func NewDecomposer(provider llm.Provider, registry *tools.Registry) *Decomposer 
 }
 
 // Decompose breaks a user task into a plan of numbered steps.
-func (d *Decomposer) Decompose(task string, cwd string) ([]Step, error) {
+func (d *Decomposer) Decompose(ctx context.Context, task string, cwd string) ([]Step, error) {
 	// Build minimal prompt — no tools, no history
 	toolNames := d.registry.List()
 
@@ -51,7 +51,7 @@ Respond with numbered steps only. Example format:
 		{Role: "user", Content: prompt},
 	}
 
-	response, err := d.provider.Generate(context.Background(), messages, llm.GenerateOptions{
+	response, err := d.provider.Generate(ctx, messages, llm.GenerateOptions{
 		Temperature: 0.3, // Low temperature for structured output
 		MaxTokens:   512, // Plans should be concise
 	})

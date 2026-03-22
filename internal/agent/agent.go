@@ -125,7 +125,12 @@ func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 
 		// Repeat detection — only count as repeat if previous SUCCEEDED.
 		// A retry after failure is a correction attempt, not a loop.
-		callKey := fmt.Sprintf("%s:%v", toolCalls[0].Name, toolCalls[0].Arguments)
+		// Hash ALL tool calls, not just the first — prevents multi-tool loops.
+		var keyParts []string
+		for _, tc := range toolCalls {
+			keyParts = append(keyParts, fmt.Sprintf("%s:%v", tc.Name, tc.Arguments))
+		}
+		callKey := strings.Join(keyParts, "|")
 		if callKey == prevCallKey && prevCallSucceeded {
 			repeatCount++
 			if repeatCount >= 2 { // allow up to 3 identical successful calls before breaking
