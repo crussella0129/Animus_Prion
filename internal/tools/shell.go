@@ -189,6 +189,9 @@ func (t *ShellTool) Execute(args map[string]interface{}) (string, error) {
 
 // splitCommand splits a command string into arguments, respecting quoted strings.
 // This is a simple parser — not a full shell parser (by design, for security).
+// Limitation: backslash escapes inside quotes are not handled (e.g., 'it\'s' would
+// terminate at the backslash-quote). This is acceptable because the metacharacter
+// rejection upstream catches backslashes before they reach this function.
 func splitCommand(command string) []string {
 	var args []string
 	var current strings.Builder

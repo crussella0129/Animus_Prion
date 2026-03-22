@@ -6,8 +6,10 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"log/slog"
 	"math/rand"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -26,6 +28,7 @@ import (
 var (
 	cfgFile   string
 	workspace string
+	verbose   bool
 	version   = "0.2.0"
 )
 
@@ -61,6 +64,11 @@ func main() {
 		Use:   "prion",
 		Short: "Prion — local-first LLM agent",
 		Long:  "Prion is a local-first LLM agent with plan-then-execute architecture, built for lightning speed.",
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			if verbose {
+				slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})))
+			}
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return interactiveSession()
 		},
@@ -68,10 +76,12 @@ func main() {
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default: ~/.animus_prion/config.yaml)")
 	rootCmd.PersistentFlags().StringVar(&workspace, "workspace", ".", "workspace root directory")
+	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable debug logging")
 
 	rootCmd.AddCommand(runCmd())
 	rootCmd.AddCommand(versionCmd())
 	rootCmd.AddCommand(configCmd())
+	rootCmd.AddCommand(setupCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -385,5 +395,97 @@ func handleSlashCommand(input string, ag *agent.Agent) bool {
 	default:
 		fmt.Printf("Unknown command: %s (type /help)\n", input)
 		return true
+	}
+}
+
+func setupCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "setup",
+		Short: "Validate environment and configure Prion",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Println()
+			fmt.Println("  Prion Setup")
+			fmt.Println("  ===========")
+			fmt.Println()
+
+			pass := 0
+			fail := 0
+
+			// 1. Config file
+			path, err := configPath()
+			if err != nil {
+				fmt.Printf("  [!] Config path error: %v\n", err)
+				fail++
+			} else if _, err := os.Stat(path); os.IsNotExist(err) {
+				fmt.Printf("  [!] Config not found: %s\n", path)
+				fmt.Println("      Run 'prion config init' to create one.")
+				fail++
+			} else {
+				fmt.Printf("  [✓] Config: %s\n", path)
+				pass++
+			}
+
+			// 2. Hardware detection
+			hw := llm.DetectHardware()
+			if hw.GPU.Available {
+				fmt.Printf("  [✓] GPU: %s (%d MB VRAM)\n", hw.GPU.Name, hw.GPU.VRAMMiB)
+			} else {
+				fmt.Println("  [·] GPU: none detected (will use CPU inference)")
+			}
+			pass++
+
+			fmt.Printf("  [✓] RAM: %d MB\n", hw.RAMMiB)
+			fmt.Printf("  [✓] CPU: %d cores (%s/%s)\n", hw.CPUCores, hw.OS, hw.Arch)
+			pass += 2
+
+			// 3. Backend recommendation
+			rec := llm.RecommendBackend(hw)
+			fmt.Printf("  [✓] Recommended: %s — %s (%s)\n", rec.Backend, rec.ModelName, rec.ModelSize)
+			pass++
+
+			// 4. Model file check (if native backend)
+			if rec.Backend == llm.BackendLlamaCPP {
+				modelPath, err := llm.FindModel(rec.ModelName)
+				if err != nil {
+					fmt.Printf("  [!] Model not found: %s\n", rec.ModelName)
+					fmt.Println("      Download it and place in ~/.animus_prion/models/")
+					fail++
+				} else {
+					fmt.Printf("  [✓] Model: %s\n", modelPath)
+					pass++
+				}
+			}
+			if rec.Backend == llm.BackendBitNet {
+				serverPath, err := llm.FindBitNetServer()
+				if err != nil {
+					fmt.Printf("  [!] BitNet server not found\n")
+					fmt.Println("      Set PRION_BITNET_SERVER or place in ~/.animus_prion/bin/")
+					fail++
+				} else {
+					fmt.Printf("  [✓] BitNet server: %s\n", serverPath)
+					pass++
+				}
+			}
+
+			// 5. llama-server check
+			if _, err := exec.LookPath("llama-server"); err == nil {
+				fmt.Println("  [✓] llama-server: found in PATH")
+				pass++
+			} else if _, err := exec.LookPath("llama-server.exe"); err == nil {
+				fmt.Println("  [✓] llama-server: found in PATH")
+				pass++
+			} else {
+				fmt.Println("  [·] llama-server: not in PATH (needed for native GGUF provider)")
+			}
+
+			fmt.Println()
+			if fail == 0 {
+				fmt.Printf("  All checks passed (%d/ok). Ready to run.\n", pass)
+			} else {
+				fmt.Printf("  %d passed, %d need attention.\n", pass, fail)
+			}
+			fmt.Println()
+			return nil
+		},
 	}
 }

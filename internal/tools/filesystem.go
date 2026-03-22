@@ -94,6 +94,16 @@ func (t *ReadFileTool) Execute(args map[string]interface{}) (string, error) {
 		return "", fmt.Errorf("path blocked: %s", result.Reason)
 	}
 
+	// Check file size before reading — reject files over 10MB to prevent OOM
+	const maxFileSize = 10 * 1024 * 1024 // 10MB
+	info, err := os.Stat(resolved)
+	if err != nil {
+		return "", fmt.Errorf("reading file: %w", err)
+	}
+	if info.Size() > maxFileSize {
+		return "", fmt.Errorf("file too large (%d bytes, max %d bytes) — use run_shell with head/tail to read portions", info.Size(), maxFileSize)
+	}
+
 	data, err := os.ReadFile(resolved)
 	if err != nil {
 		return "", fmt.Errorf("reading file: %w", err)
@@ -231,7 +241,8 @@ func (t *ListFilesTool) Parameters() ParameterSchema {
 	return ParameterSchema{
 		Type: "object",
 		Properties: map[string]ParameterSchema{
-			"path": {Type: "string", Description: "Directory path to list (default: current directory)"},
+			"path":        {Type: "string", Description: "Directory path to list (default: current directory)"},
+			"max_entries": {Type: "integer", Description: "Maximum entries to return (default: 200)"},
 		},
 	}
 }
@@ -252,13 +263,28 @@ func (t *ListFilesTool) Execute(args map[string]interface{}) (string, error) {
 		return "", fmt.Errorf("path blocked: %s", result.Reason)
 	}
 
+	maxEntries := 200
+	if v, ok := args["max_entries"]; ok {
+		switch mv := v.(type) {
+		case int:
+			maxEntries = mv
+		case float64:
+			maxEntries = int(mv)
+		}
+	}
+
 	entries, err := os.ReadDir(resolved)
 	if err != nil {
 		return "", fmt.Errorf("listing directory: %w", err)
 	}
 
 	var b strings.Builder
+	shown := 0
 	for _, entry := range entries {
+		if shown >= maxEntries {
+			fmt.Fprintf(&b, "\n... truncated (%d of %d entries shown, use max_entries to see more)\n", shown, len(entries))
+			break
+		}
 		prefix := "  "
 		if entry.IsDir() {
 			prefix = "d "
@@ -269,6 +295,7 @@ func (t *ListFilesTool) Execute(args map[string]interface{}) (string, error) {
 			size = info.Size()
 		}
 		fmt.Fprintf(&b, "%s%-40s %8d bytes\n", prefix, entry.Name(), size)
+		shown++
 	}
 
 	if b.Len() == 0 {

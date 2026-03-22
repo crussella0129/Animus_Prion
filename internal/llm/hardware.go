@@ -108,8 +108,21 @@ func RecommendBackend(hw HardwareProfile) ModelRecommendation {
 	}
 }
 
-// detectGPU finds an NVIDIA GPU and its VRAM via nvidia-smi.
+// detectGPU finds a GPU and its VRAM. Tries NVIDIA first, then AMD ROCm.
 func detectGPU() GPUInfo {
+	// Try NVIDIA first (most common for ML workloads)
+	if info := detectNvidiaGPU(); info.Available {
+		return info
+	}
+	// Try AMD ROCm
+	if info := detectAMDGPU(); info.Available {
+		return info
+	}
+	return GPUInfo{Available: false}
+}
+
+// detectNvidiaGPU finds an NVIDIA GPU via nvidia-smi.
+func detectNvidiaGPU() GPUInfo {
 	out, err := exec.Command("nvidia-smi",
 		"--query-gpu=name,memory.total",
 		"--format=csv,noheader,nounits",
@@ -135,6 +148,48 @@ func detectGPU() GPUInfo {
 		Available: true,
 		Name:      strings.TrimSpace(parts[0]),
 		VRAMMiB:   vram,
+	}
+}
+
+// detectAMDGPU finds an AMD GPU via rocm-smi.
+func detectAMDGPU() GPUInfo {
+	// Get VRAM: rocm-smi --showmeminfo vram
+	// Output includes lines like: "vram Total Memory (B): 17163091968"
+	out, err := exec.Command("rocm-smi", "--showmeminfo", "vram").Output()
+	if err != nil {
+		return GPUInfo{Available: false}
+	}
+
+	output := string(out)
+	vramMiB := 0
+
+	// Parse total VRAM in bytes from output
+	re := regexp.MustCompile(`(?i)vram\s+Total\s+Memory\s*\(B\)\s*:\s*(\d+)`)
+	if m := re.FindStringSubmatch(output); len(m) > 1 {
+		b, _ := strconv.ParseInt(m[1], 10, 64)
+		vramMiB = int(b / 1024 / 1024)
+	}
+
+	// Get GPU name: rocm-smi --showproductname
+	name := "AMD GPU"
+	nameOut, err := exec.Command("rocm-smi", "--showproductname").Output()
+	if err == nil {
+		// Parse card series name from output
+		nameRe := regexp.MustCompile(`(?i)Card\s+Series:\s*(.+)`)
+		if m := nameRe.FindStringSubmatch(string(nameOut)); len(m) > 1 {
+			name = strings.TrimSpace(m[1])
+		}
+	}
+
+	if vramMiB == 0 {
+		// rocm-smi ran but no VRAM parsed — GPU exists but info unclear
+		return GPUInfo{Available: true, Name: name}
+	}
+
+	return GPUInfo{
+		Available: true,
+		Name:      name,
+		VRAMMiB:   vramMiB,
 	}
 }
 

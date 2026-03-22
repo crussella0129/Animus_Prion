@@ -45,7 +45,15 @@
 - [x] Inject write log instead of global (defaultWriteLog + NewWriteFileToolWithLog)
 - [x] Document Agent.history as non-concurrent (YAGNI — REPL is single-threaded)
 
-## Backlog (P2+)
+### Code Review P2/P3 Fixes (2026-03-22) — DONE
+- [x] Add --verbose/-v flag for slog debug output
+- [x] Add AMD GPU detection (rocm-smi fallback after nvidia-smi)
+- [x] Add `prion setup` command (environment validation + diagnostics)
+- [x] Add file size limit to read_file (10MB max, clear error message)
+- [x] Add max_entries to list_files (default 200, truncation message)
+- [x] Document splitCommand escape limitation
+
+## Backlog
 - [ ] Round 3 benchmark with 14B model
 - [ ] Benchmark harness (`prion bench`)
 - [ ] MCP server mode (`prion serve`)
@@ -53,8 +61,6 @@
 - [ ] Tree-sitter multi-language parsing
 - [ ] CI/CD with GitHub Actions
 - [ ] Add streaming (StreamProvider implementations)
-- [ ] Add AMD GPU detection (rocm-smi)
-- [ ] Add `prion setup` command
 - [ ] Consider HNSW for vector store >10k chunks
 
 ## Completed
@@ -66,3 +72,4 @@
 - [x] Tiers 1-4: 22 issues fixed, 108 tests
 - [x] Code Review P0: 4 bugs fixed, 129 tests
 - [x] Code Review P1: 6 issues fixed, 134 tests
+- [x] Code Review P2/P3: 6 items, 136 tests

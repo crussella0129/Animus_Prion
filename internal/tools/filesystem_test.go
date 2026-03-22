@@ -181,6 +181,46 @@ func TestListFilesTool(t *testing.T) {
 	}
 }
 
+func TestReadFileToolSizeLimit(t *testing.T) {
+	ws, checker := setupTestWorkspace(t)
+	tool := NewReadFileTool(ws, checker)
+
+	// Create a file just over 10MB
+	bigFile := filepath.Join(ws.Root(), "big.bin")
+	os.WriteFile(bigFile, make([]byte, 11*1024*1024), 0644)
+
+	_, err := tool.Execute(map[string]interface{}{"path": "big.bin"})
+	if err == nil {
+		t.Error("expected error for file over size limit")
+	}
+	if !strings.Contains(err.Error(), "too large") {
+		t.Errorf("expected 'too large' error, got: %v", err)
+	}
+}
+
+func TestListFilesToolMaxEntries(t *testing.T) {
+	ws, checker := setupTestWorkspace(t)
+
+	// Create 10 files
+	for i := 0; i < 10; i++ {
+		os.WriteFile(filepath.Join(ws.Root(), strings.Repeat("a", i+1)+".txt"), []byte("x"), 0644)
+	}
+
+	tool := NewListFilesTool(ws, checker)
+
+	// Request only 3 entries
+	result, err := tool.Execute(map[string]interface{}{"max_entries": 3})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !strings.Contains(result, "truncated") {
+		t.Error("expected truncation message")
+	}
+	if !strings.Contains(result, "3 of 10") {
+		t.Errorf("expected '3 of 10' in truncation message, got: %s", result)
+	}
+}
+
 func TestListFilesToolEmpty(t *testing.T) {
 	ws, chk := setupTestWorkspace(t)
 	tool := NewListFilesTool(ws, chk)

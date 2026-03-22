@@ -379,3 +379,40 @@ None blocking.
 
 ### Next
 - P2+ backlog items (streaming, AMD GPU, HNSW, CI/CD, etc.)
+
+---
+
+## Entry #9 — 2026-03-22
+
+### Summary
+Code review P2/P3 fixes: 6 practical improvements. 136 tests passing.
+
+### Actions
+- Added --verbose/-v flag: PersistentPreRun hook sets slog to LevelDebug
+- Added AMD GPU detection: detectAMDGPU() via rocm-smi as fallback after NVIDIA
+- Added `prion setup` command: validates config, hardware, model files, llama-server
+- Added 10MB file size limit to read_file with clear error message
+- Added max_entries parameter to list_files (default 200) with truncation message
+- Documented splitCommand backslash-escape limitation (metachar rejection catches upstream)
+
+### Files Changed
+- `cmd/prion/main.go` — --verbose flag, setupCmd(), exec import
+- `internal/llm/hardware.go` — detectGPU refactored, detectAMDGPU() added
+- `internal/tools/filesystem.go` — 10MB read limit, max_entries for list
+- `internal/tools/filesystem_test.go` — 2 new tests (size limit, max entries)
+- `internal/tools/shell.go` — splitCommand doc comment
+
+### Findings
+- The setup command closes a UX gap — error messages previously referenced `prion setup` which didn't exist
+- max_entries=200 is generous enough for any normal directory but prevents node_modules-sized output
+
+### Issues
+None blocking.
+
+### Checkpoint
+**Status:** CONTINUE — All code review items (P0/P1/P2/P3) complete. Remaining backlog is new features.
+
+### Next
+- Streaming (StreamProvider) — biggest UX improvement remaining
+- CI/CD with GitHub Actions
+- Tree-sitter for multi-language AST parsing
