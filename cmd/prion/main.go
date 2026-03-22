@@ -109,6 +109,12 @@ func interactiveSession() error {
 		ContextLength: e.cfg.Model.ContextLength,
 	})
 
+	// Enable streaming — tokens print as they arrive
+	ag.SetStreaming(func(chunk string) {
+		fmt.Print(chunk)
+		os.Stdout.Sync()
+	})
+
 	fmt.Println("  Type your task, or /help for commands, /quit to exit.")
 	fmt.Println()
 
@@ -139,9 +145,13 @@ func interactiveSession() error {
 		start := time.Now()
 
 		var response string
+		streamed := false
 		if planner.IsSimpleTask(input) {
-			fmt.Println("  Thinking...")
+			// Streaming: tokens print in real-time via onChunk callback
+			streamed = true
+			fmt.Print("  ")
 			response, err = ag.Run(context.Background(), input)
+			fmt.Println() // newline after streamed output
 		} else {
 			pe := planner.NewPlanExecutor(e.provider, e.registry, e.workspace)
 			pe.SetProgress(func(msg string) {
@@ -167,7 +177,7 @@ func interactiveSession() error {
 			continue
 		}
 
-		if response != "" {
+		if response != "" && !streamed {
 			fmt.Println()
 			fmt.Println(response)
 		}

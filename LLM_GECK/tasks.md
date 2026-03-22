@@ -53,14 +53,22 @@
 - [x] Add max_entries to list_files (default 200, truncation message)
 - [x] Document splitCommand escape limitation
 
+### Streaming (2026-03-22) — DONE
+- [x] LocalProvider.GenerateStream — OpenAI-compatible SSE parsing
+- [x] AnthropicProvider.GenerateStream — Anthropic SSE parsing with tool_use support
+- [x] Agent.SetStreaming — onChunk callback, auto-detects StreamProvider
+- [x] REPL wired for token-by-token output
+
+### CI/CD (2026-03-22) — DONE
+- [x] GitHub Actions: test (ubuntu + windows), vet, build, gofmt lint
+- [x] gofmt applied to all source files
+
 ## Backlog
 - [ ] Round 3 benchmark with 14B model
 - [ ] Benchmark harness (`prion bench`)
 - [ ] MCP server mode (`prion serve`)
 - [ ] GBNF grammar constraints
 - [ ] Tree-sitter multi-language parsing
-- [ ] CI/CD with GitHub Actions
-- [ ] Add streaming (StreamProvider implementations)
 - [ ] Consider HNSW for vector store >10k chunks
 
 ## Completed
@@ -73,3 +81,5 @@
 - [x] Code Review P0: 4 bugs fixed, 129 tests
 - [x] Code Review P1: 6 issues fixed, 134 tests
 - [x] Code Review P2/P3: 6 items, 136 tests
+- [x] CI/CD + gofmt: GitHub Actions, 136 tests
+- [x] Streaming: LocalProvider + Anthropic + agent wiring, 142 tests

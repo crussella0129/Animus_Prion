@@ -416,3 +416,43 @@ None blocking.
 - Streaming (StreamProvider) — biggest UX improvement remaining
 - CI/CD with GitHub Actions
 - Tree-sitter for multi-language AST parsing
+
+---
+
+## Entry #10 — 2026-03-22
+
+### Summary
+Implemented streaming for both providers, CI/CD, and gofmt. 142 tests passing.
+
+### Actions
+- Created stream.go: GenerateStream for LocalProvider (OpenAI SSE) and AnthropicProvider (Anthropic SSE)
+- OpenAI SSE parser: handles "data: {json}" lines, "data: [DONE]" terminator, malformed chunk tolerance
+- Anthropic SSE parser: handles event/data lines, content_block_delta (text), content_block_start (tool_use), message_stop
+- Agent.SetStreaming: onChunk callback, auto-detects StreamProvider via type assertion
+- REPL: tokens print in real-time, skips redundant response print for streamed output
+- GitHub Actions CI: test matrix (ubuntu+windows), go vet, go test -race, go build, gofmt lint
+- Applied gofmt to all 20 source files
+
+### Files Changed
+- `internal/llm/stream.go` — NEW: streaming implementations + SSE parsers
+- `internal/llm/stream_test.go` — NEW: 6 SSE parser tests
+- `internal/agent/agent.go` — onChunk field, SetStreaming(), streaming in step()
+- `cmd/prion/main.go` — streaming wiring, display logic for streamed output
+- `.github/workflows/ci.yml` — NEW: CI workflow
+- 20 `.go` files — gofmt formatting
+
+### Findings
+- SSE parsing is straightforward with bufio.Scanner — no need for an SSE library
+- Anthropic tool_use blocks in streaming arrive as content_block_start events with the full input, not as deltas
+- The `streamed` flag in the REPL prevents double-printing: tokens stream in real-time, then the timing footer prints
+
+### Issues
+None blocking.
+
+### Checkpoint
+**Status:** CONTINUE — Streaming complete. All code review items resolved.
+
+### Next
+- Tree-sitter for multi-language AST parsing
+- Benchmark harness
+- MCP server mode

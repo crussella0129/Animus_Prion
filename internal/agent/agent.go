@@ -26,6 +26,7 @@ type Agent struct {
 	maxTurns      int
 	history       []core.Message
 	contextWindow *core.ContextWindow
+	onChunk       func(string) // streaming callback — when set, uses GenerateStream
 }
 
 // Config holds agent initialization parameters.
@@ -180,6 +181,7 @@ func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 }
 
 // step performs a single LLM generation call.
+// Uses streaming when onChunk is set and the provider supports it.
 func (a *Agent) step(ctx context.Context) (string, error) {
 	caps := a.provider.Capabilities()
 	schemas := a.registry.ToOpenAISchemas()
@@ -192,6 +194,13 @@ func (a *Agent) step(ctx context.Context) (string, error) {
 		Temperature: 0.7,
 		MaxTokens:   caps.ContextLength / 4,
 		Tools:       toolsAny,
+	}
+
+	// Use streaming when callback is set and provider supports it
+	if a.onChunk != nil {
+		if sp, ok := a.provider.(llm.StreamProvider); ok {
+			return sp.GenerateStream(ctx, a.history, opts, a.onChunk)
+		}
 	}
 
 	return a.provider.Generate(ctx, a.history, opts)
@@ -248,6 +257,13 @@ func defaultSystemPrompt(registry *tools.Registry) string {
 	sb.WriteString("- Write one file at a time. After each write_file, proceed to the next file.\n")
 
 	return sb.String()
+}
+
+// SetStreaming enables token-by-token streaming output.
+// When set, the agent uses GenerateStream (if the provider supports it)
+// and calls onChunk for each token delta.
+func (a *Agent) SetStreaming(onChunk func(string)) {
+	a.onChunk = onChunk
 }
 
 // History returns the conversation history.
