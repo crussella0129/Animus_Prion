@@ -153,12 +153,12 @@ func interactiveSession() error {
 			response, err = ag.Run(context.Background(), input)
 			fmt.Println() // newline after streamed output
 		} else {
-			pe := planner.NewPlanExecutor(e.provider, e.registry, e.workspace)
-			pe.SetProgress(func(msg string) {
+			sp := planner.NewSkeletonPlanner(e.provider, e.registry, e.workspace)
+			sp.SetProgress(func(msg string) {
 				fmt.Fprintf(os.Stdout, "  %s\n", msg)
 				os.Stdout.Sync()
 			})
-			result, planErr := pe.Execute(context.Background(), input)
+			result, planErr := sp.PlanAndExecute(context.Background(), input)
 			if planErr != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n\n", planErr)
 				continue
@@ -222,9 +222,9 @@ func runCmd() *cobra.Command {
 				return nil
 			}
 
-			pe := planner.NewPlanExecutor(e.provider, e.registry, e.workspace)
-			pe.SetProgress(func(msg string) { fmt.Printf("  %s\n", msg) })
-			result, err := pe.Execute(context.Background(), task)
+			sp := planner.NewSkeletonPlanner(e.provider, e.registry, e.workspace)
+			sp.SetProgress(func(msg string) { fmt.Printf("  %s\n", msg) })
+			result, err := sp.PlanAndExecute(context.Background(), task)
 			if err != nil {
 				return err
 			}
