@@ -34,10 +34,16 @@ type SearchHit struct {
 	Similarity float64 `json:"similarity"`
 }
 
+// hnswThreshold is the chunk count above which HNSW index is used for search.
+// Below this, brute-force KNN is fast enough and more accurate.
+const hnswThreshold = 10000
+
 // VectorStore manages embedding storage and KNN search in SQLite.
+// Automatically uses HNSW index when chunk count exceeds hnswThreshold.
 type VectorStore struct {
 	db         *sql.DB
 	dimensions int
+	index      *HNSWIndex // lazily built when chunk count exceeds threshold
 }
 
 // NewVectorStore opens or creates a vector store at the given path.
@@ -88,7 +94,17 @@ func (vs *VectorStore) Insert(chunk Chunk) (int64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("inserting chunk: %w", err)
 	}
-	return result.LastInsertId()
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+
+	// Add to HNSW index if active
+	if vs.index != nil {
+		vs.index.Insert(id, chunk.Embedding)
+	}
+
+	return id, nil
 }
 
 // InsertBatch inserts multiple chunks in a single transaction.
@@ -117,9 +133,39 @@ func (vs *VectorStore) InsertBatch(chunks []Chunk) error {
 	return tx.Commit()
 }
 
-// Search performs brute-force KNN search using cosine similarity.
-// Returns the top-K most similar chunks to the query embedding.
+// Search performs KNN search. Uses HNSW for large datasets (>10k chunks),
+// brute-force cosine similarity for small ones.
 func (vs *VectorStore) Search(queryEmbedding []float32, topK int) ([]SearchHit, error) {
+	// Use HNSW index if available
+	if vs.index != nil && vs.index.Len() > 0 {
+		return vs.searchHNSW(queryEmbedding, topK)
+	}
+	return vs.searchBruteForce(queryEmbedding, topK)
+}
+
+// searchHNSW uses the HNSW index for fast approximate search.
+func (vs *VectorStore) searchHNSW(queryEmbedding []float32, topK int) ([]SearchHit, error) {
+	ids, dists := vs.index.Search(queryEmbedding, topK)
+
+	var hits []SearchHit
+	for i, id := range ids {
+		// Fetch chunk metadata from SQLite (embedding not needed — we have the distance)
+		var c Chunk
+		err := vs.db.QueryRow(
+			"SELECT id, text, source, start_line, end_line FROM chunks WHERE id = ?", id,
+		).Scan(&c.ID, &c.Text, &c.Source, &c.StartLine, &c.EndLine)
+		if err != nil {
+			continue // chunk may have been deleted
+		}
+		// Convert cosine distance back to similarity
+		hits = append(hits, SearchHit{Chunk: c, Similarity: float64(1.0 - dists[i])})
+	}
+	return hits, nil
+}
+
+// searchBruteForce performs brute-force KNN search using cosine similarity.
+// Returns the top-K most similar chunks to the query embedding.
+func (vs *VectorStore) searchBruteForce(queryEmbedding []float32, topK int) ([]SearchHit, error) {
 	rows, err := vs.db.Query("SELECT id, text, source, start_line, end_line, embedding FROM chunks")
 	if err != nil {
 		return nil, err
@@ -161,6 +207,52 @@ func (vs *VectorStore) Search(queryEmbedding []float32, topK int) ([]SearchHit, 
 func (vs *VectorStore) DeleteBySource(source string) error {
 	_, err := vs.db.Exec("DELETE FROM chunks WHERE source = ?", source)
 	return err
+}
+
+// BuildIndex constructs the HNSW index from all chunks in the store.
+// Call this after bulk loading or when chunk count exceeds hnswThreshold.
+func (vs *VectorStore) BuildIndex() error {
+	count, err := vs.Count()
+	if err != nil {
+		return err
+	}
+	if count < hnswThreshold {
+		return nil // not enough chunks to warrant an index
+	}
+
+	vs.index = NewHNSWIndex()
+
+	rows, err := vs.db.Query("SELECT id, embedding FROM chunks")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int64
+		var blob []byte
+		if err := rows.Scan(&id, &blob); err != nil {
+			return err
+		}
+		vs.index.Insert(id, bytesToFloat32(blob))
+	}
+	return rows.Err()
+}
+
+// EnsureIndex builds the HNSW index if chunk count exceeds the threshold
+// and the index hasn't been built yet.
+func (vs *VectorStore) EnsureIndex() error {
+	if vs.index != nil {
+		return nil // already built
+	}
+	count, err := vs.Count()
+	if err != nil {
+		return err
+	}
+	if count >= hnswThreshold {
+		return vs.BuildIndex()
+	}
+	return nil
 }
 
 // Count returns the total number of chunks in the store.

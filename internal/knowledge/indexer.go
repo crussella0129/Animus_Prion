@@ -118,6 +118,16 @@ func (idx *Indexer) indexFile(path string) error {
 	switch ext {
 	case ".go":
 		result, err = ParseGoFile(path)
+	case ".py", ".pyi":
+		result, err = ParsePythonFile(path)
+	case ".rs":
+		result, err = ParseRustFile(path)
+	case ".js", ".jsx", ".ts", ".tsx":
+		result, err = ParseJSFile(path)
+	case ".c", ".cc", ".cpp", ".h", ".hpp":
+		result, err = ParseCFile(path)
+	case ".java":
+		result, err = ParseJavaFile(path)
 	default:
 		return fmt.Errorf("unsupported file type: %s", ext)
 	}
@@ -167,8 +177,11 @@ func (idx *Indexer) discoverFiles() ([]string, error) {
 // isSupportedExtension checks if a file extension is indexable.
 func isSupportedExtension(ext string) bool {
 	supported := map[string]bool{
-		".go": true,
-		// Future: ".py", ".js", ".ts", ".rs", ".java", ".c", ".cpp"
+		".go": true, ".py": true, ".pyi": true,
+		".rs": true,
+		".js": true, ".jsx": true, ".ts": true, ".tsx": true,
+		".c": true, ".cc": true, ".cpp": true, ".h": true, ".hpp": true,
+		".java": true,
 	}
 	return supported[ext]
 }
