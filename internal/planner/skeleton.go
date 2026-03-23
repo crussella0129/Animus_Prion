@@ -16,12 +16,14 @@ import (
 
 // SkeletonPlanner implements recursive skeleton tree decomposition.
 type SkeletonPlanner struct {
-	provider   llm.Provider
-	executor   *ChunkedExecutor
-	registry   *tools.Registry
-	workspace  *core.Workspace
-	maxDepth   int
-	onProgress ProgressFunc
+	provider    llm.Provider
+	executor    *ChunkedExecutor
+	registry    *tools.Registry
+	workspace   *core.Workspace
+	maxDepth    int
+	onProgress  ProgressFunc
+	sessionRoot *TaskNode // held during execution for checkpoint access
+	sessionID   string    // unique ID for this planning session
 }
 
 // NewSkeletonPlanner creates a skeleton tree planner.
@@ -172,6 +174,12 @@ func (sp *SkeletonPlanner) expandNode(ctx context.Context, node *TaskNode) {
 // Branch nodes get summaries from their children's results.
 // Returns a PlanResult compatible with the existing pipeline.
 func (sp *SkeletonPlanner) Execute(ctx context.Context, root *TaskNode) (PlanResult, error) {
+	// Set session state for checkpoint access
+	sp.sessionRoot = root
+	if sp.sessionID == "" {
+		sp.sessionID = fmt.Sprintf("%d", time.Now().UnixMilli())
+	}
+
 	var allResults []StepResult
 	allSuccess := true
 
@@ -197,6 +205,11 @@ func (sp *SkeletonPlanner) Execute(ctx context.Context, root *TaskNode) (PlanRes
 // Branch nodes collect child summaries. siblingContext carries sibling branch summaries.
 func (sp *SkeletonPlanner) executeNode(ctx context.Context, node *TaskNode, siblingContext string, results *[]StepResult, allSuccess *bool) {
 	if ctx.Err() != nil {
+		return
+	}
+
+	// Skip already-completed nodes (resume support)
+	if node.Status == StatusCompleted {
 		return
 	}
 
@@ -254,12 +267,31 @@ func (sp *SkeletonPlanner) executeNode(ctx context.Context, node *TaskNode, sibl
 	node.Status = StatusCompleted
 }
 
-// checkpoint saves the tree state after each leaf execution.
-// Writes to .prion_session.json in the workspace root.
+// checkpoint saves the full tree state after each leaf execution.
+// Writes to .prion_session_<id>.json in the workspace root.
 func (sp *SkeletonPlanner) checkpoint(node *TaskNode) {
-	// Walk up to find root — for now, just log. Full implementation in Phase 3.
-	// The tree is serializable via json.Marshal since all fields have json tags.
-	_ = node // placeholder for session persistence
+	if sp.sessionRoot == nil || sp.workspace == nil {
+		return
+	}
+	state := &SessionState{
+		ID:        sp.sessionID,
+		Task:      sp.sessionRoot.Description,
+		Root:      sp.sessionRoot,
+		Timestamp: time.Now(),
+	}
+	if err := SaveSession(state, sp.workspace.Root()); err != nil {
+		// Non-fatal — log but don't fail the execution
+		sp.progress("  (checkpoint save failed: %v)", err)
+	}
+}
+
+// cleanupSession removes the session file after successful completion.
+func (sp *SkeletonPlanner) cleanupSession() {
+	if sp.workspace == nil || sp.sessionID == "" {
+		return
+	}
+	path := filepath.Join(sp.workspace.Root(), fmt.Sprintf(".prion_session_%s.json", sp.sessionID))
+	os.Remove(path) // best-effort
 }
 
 // --- Session State (Phase 2/3 — structure now, full implementation later) ---
@@ -314,10 +346,68 @@ func FindNextPending(node *TaskNode) *TaskNode {
 }
 
 // PlanAndExecute is the top-level entry point: plan the tree, then execute it.
+// Checks for an existing session file and resumes if one is found with pending work.
 func (sp *SkeletonPlanner) PlanAndExecute(ctx context.Context, task string) (PlanResult, error) {
+	// Check for existing session to resume
+	if sp.workspace != nil {
+		if root, sessionID := sp.findExistingSession(task); root != nil {
+			pending := FindNextPending(root)
+			if pending != nil {
+				sp.progress("Resuming from checkpoint (%d pending nodes)...", countPending(root))
+				sp.sessionID = sessionID
+				result, err := sp.Execute(ctx, root)
+				if err == nil && result.Success {
+					sp.cleanupSession()
+				}
+				return result, err
+			}
+		}
+	}
+
 	root, err := sp.Plan(ctx, task)
 	if err != nil {
 		return PlanResult{}, err
 	}
-	return sp.Execute(ctx, root)
+	result, execErr := sp.Execute(ctx, root)
+	if execErr == nil && result.Success {
+		sp.cleanupSession()
+	}
+	return result, execErr
+}
+
+// findExistingSession looks for a session file that matches the given task.
+func (sp *SkeletonPlanner) findExistingSession(task string) (*TaskNode, string) {
+	if sp.workspace == nil {
+		return nil, ""
+	}
+	matches, err := filepath.Glob(filepath.Join(sp.workspace.Root(), ".prion_session_*.json"))
+	if err != nil || len(matches) == 0 {
+		return nil, ""
+	}
+	// Check each session file for a matching task
+	for _, path := range matches {
+		state, err := LoadSession(path)
+		if err != nil {
+			continue
+		}
+		if state.Root != nil && similar(state.Task, task) {
+			return state.Root, state.ID
+		}
+	}
+	return nil, ""
+}
+
+// countPending counts the number of pending leaf nodes in the tree.
+func countPending(node *TaskNode) int {
+	if node == nil {
+		return 0
+	}
+	if (node.IsLeaf() || len(node.Children) == 0) && node.Status == StatusPending {
+		return 1
+	}
+	count := 0
+	for _, child := range node.Children {
+		count += countPending(child)
+	}
+	return count
 }

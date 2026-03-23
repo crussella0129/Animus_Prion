@@ -89,6 +89,7 @@ type chatRequest struct {
 	MaxTokens   int       `json:"max_tokens,omitempty"`
 	Tools       []any     `json:"tools,omitempty"`
 	Stop        []string  `json:"stop,omitempty"`
+	Grammar     string    `json:"grammar,omitempty"` // GBNF grammar (llama-server)
 }
 
 // chatResponse is the response from the chat completions endpoint.
@@ -113,6 +114,7 @@ func (p *LocalProvider) Generate(ctx context.Context, messages []Message, opts G
 		Temperature: opts.Temperature,
 		MaxTokens:   opts.MaxTokens,
 		Stop:        opts.StopTokens,
+		Grammar:     opts.Grammar,
 	}
 
 	// Only send tools if the model supports them

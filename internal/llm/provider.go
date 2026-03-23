@@ -44,6 +44,7 @@ type GenerateOptions struct {
 	Tools       []any // OpenAI-format tool schemas
 	StopTokens  []string
 	JSONMode    bool
+	Grammar     string // GBNF grammar string (llama-server only)
 }
 
 // Provider is the interface for LLM backends.

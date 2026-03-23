@@ -63,11 +63,18 @@
 - [x] GitHub Actions: test (ubuntu + windows), vet, build, gofmt lint
 - [x] gofmt applied to all source files
 
+### Skeleton Tree Decomposition (2026-03-22) — DONE
+- [x] TaskNode tree, parseSkeletonLevel, isLeafHeuristic, similar(), summarizeBranch
+- [x] SkeletonPlanner: recursive expansion, restatement detection, tree execution
+- [x] Session checkpoint/resume: SaveSession, LoadSession, FindNextPending, auto-resume
+- [x] GBNF grammar constraints for local models (ToolCallGrammar, ToolCallOrTextGrammar)
+- [x] Agent uses GBNF grammar when provider lacks native tool support
+- [x] Wired into REPL and CLI (replaces PlanExecutor)
+
 ## Backlog
 - [ ] Round 3 benchmark with 14B model
 - [ ] Benchmark harness (`prion bench`)
 - [ ] MCP server mode (`prion serve`)
-- [ ] GBNF grammar constraints
 - [ ] Tree-sitter multi-language parsing
 - [ ] Consider HNSW for vector store >10k chunks
 
@@ -83,3 +90,5 @@
 - [x] Code Review P2/P3: 6 items, 136 tests
 - [x] CI/CD + gofmt: GitHub Actions, 136 tests
 - [x] Streaming: LocalProvider + Anthropic + agent wiring, 142 tests
+- [x] Round 2 review: Anthropic message merging, input_json_delta, cancellable sleeps, 145 tests
+- [x] Skeleton tree decomposition + GBNF grammar + session persistence, 170 tests

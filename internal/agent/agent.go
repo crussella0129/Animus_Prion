@@ -204,6 +204,13 @@ func (a *Agent) step(ctx context.Context) (string, error) {
 		Tools:       toolsAny,
 	}
 
+	// For local models without native tool support, use GBNF grammar
+	// to constrain output to valid tool-call JSON or free text.
+	if !caps.SupportsTools {
+		toolNames := a.registry.List()
+		opts.Grammar = llm.ToolCallOrTextGrammar(toolNames)
+	}
+
 	// Use streaming when callback is set and provider supports it
 	if a.onChunk != nil {
 		if sp, ok := a.provider.(llm.StreamProvider); ok {

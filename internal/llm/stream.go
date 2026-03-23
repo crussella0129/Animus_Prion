@@ -21,6 +21,7 @@ type streamChatRequest struct {
 	MaxTokens   int       `json:"max_tokens,omitempty"`
 	Tools       []any     `json:"tools,omitempty"`
 	Stop        []string  `json:"stop,omitempty"`
+	Grammar     string    `json:"grammar,omitempty"` // GBNF grammar (llama-server)
 	Stream      bool      `json:"stream"`
 }
 
@@ -44,6 +45,7 @@ func (p *LocalProvider) GenerateStream(ctx context.Context, messages []Message, 
 		Temperature: opts.Temperature,
 		MaxTokens:   opts.MaxTokens,
 		Stop:        opts.StopTokens,
+		Grammar:     opts.Grammar,
 		Stream:      true,
 	}
 

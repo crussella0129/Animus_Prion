@@ -254,6 +254,54 @@ func TestSessionStateSerializes(t *testing.T) {
 	}
 }
 
+func TestCountPending(t *testing.T) {
+	root := &TaskNode{
+		Children: []*TaskNode{
+			{Description: "done", Status: StatusCompleted, Type: StepWrite},
+			{Description: "pending 1", Status: StatusPending, Type: StepWrite},
+			{Description: "branch", Status: StatusRunning, Children: []*TaskNode{
+				{Description: "nested done", Status: StatusCompleted, Type: StepWrite},
+				{Description: "pending 2", Status: StatusPending, Type: StepShell},
+			}},
+		},
+	}
+
+	count := countPending(root)
+	if count != 2 {
+		t.Errorf("got %d pending, want 2", count)
+	}
+}
+
+func TestResumeSkipsCompletedNodes(t *testing.T) {
+	// Simulate a tree with some completed and some pending nodes
+	root := &TaskNode{
+		Description: "build app",
+		Status:      StatusRunning,
+		Children: []*TaskNode{
+			{Depth: 1, Description: "create main.py", Type: StepWrite, Status: StatusCompleted, Result: "wrote main.py"},
+			{Depth: 1, Description: "run tests", Type: StepShell, Status: StatusPending},
+		},
+	}
+
+	// Save session
+	dir := t.TempDir()
+	state := &SessionState{ID: "resume-test", Task: "build app", Root: root}
+	if err := SaveSession(state, dir); err != nil {
+		t.Fatalf("save failed: %v", err)
+	}
+
+	// Verify FindNextPending finds the right node
+	found := FindNextPending(root)
+	if found == nil || found.Description != "run tests" {
+		t.Errorf("expected 'run tests', got %v", found)
+	}
+
+	// Verify countPending
+	if count := countPending(root); count != 1 {
+		t.Errorf("got %d pending, want 1", count)
+	}
+}
+
 // Verify siblingContext doesn't grow unbounded with large results
 func TestExecuteNodeContextCompression(t *testing.T) {
 	// Create a tree with 5 leaf children
