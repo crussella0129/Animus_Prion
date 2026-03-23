@@ -33,7 +33,7 @@ func NewSkeletonPlanner(provider llm.Provider, registry *tools.Registry, ws *cor
 		executor:  NewChunkedExecutor(provider, registry, ws),
 		registry:  registry,
 		workspace: ws,
-		maxDepth:  5,
+		maxDepth:  3, // 3 levels is enough — deeper decomposition produces noise
 	}
 }
 
@@ -70,7 +70,7 @@ func (sp *SkeletonPlanner) Plan(ctx context.Context, task string) (*TaskNode, er
 	if len(children) == 0 {
 		response, err = sp.provider.Generate(ctx, []llm.Message{
 			{Role: "user", Content: fmt.Sprintf(
-				"Break this task into steps. Use dashes to mark each step.\n\nTask: %s\n\nRespond with a dashed list only:\n- ",
+				"Break this task into 3-5 concrete steps. Each step should be a single file operation or command.\n\nTask: %s\n\nRespond with a dashed list only:\n- ",
 				task,
 			)},
 		}, llm.GenerateOptions{Temperature: 0.3, MaxTokens: 512})
@@ -88,6 +88,12 @@ func (sp *SkeletonPlanner) Plan(ctx context.Context, task string) (*TaskNode, er
 			Type:        inferStepType(task),
 			Status:      StatusPending,
 		}, nil
+	}
+
+	// Cap top-level steps to prevent plan explosion
+	const maxTopLevelSteps = 5
+	if len(children) > maxTopLevelSteps {
+		children = children[:maxTopLevelSteps]
 	}
 
 	// Build root node
@@ -127,7 +133,7 @@ func (sp *SkeletonPlanner) expandNode(ctx context.Context, node *TaskNode) {
 	sp.progress("  Expanding: %s", truncate(node.Description, 60))
 
 	prompt := fmt.Sprintf(
-		"Break this task into sub-steps. Use dashes to mark each step.\n\nTask: %s\n\nRespond with a dashed list only:\n- ",
+		"Break this task into 2-4 concrete sub-steps. Each sub-step should be a single file write or command.\n\nTask: %s\n\nRespond with a dashed list only:\n- ",
 		node.Description,
 	)
 
@@ -160,6 +166,12 @@ func (sp *SkeletonPlanner) expandNode(ctx context.Context, node *TaskNode) {
 		return
 	}
 
+	// Cap children to prevent plan explosion
+	const maxChildren = 5
+	if len(children) > maxChildren {
+		children = children[:maxChildren]
+	}
+
 	node.Children = children
 
 	// Recursively expand children that aren't leaves
@@ -178,6 +190,11 @@ func (sp *SkeletonPlanner) Execute(ctx context.Context, root *TaskNode) (PlanRes
 	sp.sessionRoot = root
 	if sp.sessionID == "" {
 		sp.sessionID = fmt.Sprintf("%d", time.Now().UnixMilli())
+	}
+
+	// Verify provider is still available before starting execution
+	if !sp.provider.Available() {
+		return PlanResult{}, fmt.Errorf("provider is not available — the model server may have shut down during planning")
 	}
 
 	var allResults []StepResult

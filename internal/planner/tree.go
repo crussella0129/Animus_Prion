@@ -59,12 +59,9 @@ func isLeafHeuristic(node *TaskNode) bool {
 	desc := node.Description
 	words := strings.Fields(desc)
 
-	// Rule 1: Short description that maps to a known step type
-	if len(words) <= 12 {
-		stepType := inferStepType(desc)
-		if stepType != StepAnalyze { // StepAnalyze is the "I don't know" default
-			return true
-		}
+	// Rule 1: Hard depth limit — never recurse past depth 3
+	if node.Depth >= 3 {
+		return true
 	}
 
 	// Rule 2: References exactly one file — single-file operations are atomic
@@ -73,8 +70,17 @@ func isLeafHeuristic(node *TaskNode) bool {
 		return true
 	}
 
-	// Rule 3: Hard depth limit — never recurse past depth 5
-	if node.Depth >= 5 {
+	// Rule 3: Short description that maps to a known step type
+	// 8 words is enough for "write calc.py with add subtract multiply divide"
+	if len(words) <= 8 {
+		stepType := inferStepType(desc)
+		if stepType != StepAnalyze {
+			return true
+		}
+	}
+
+	// Rule 4: Very short descriptions are always leaves (even if untyped)
+	if len(words) <= 5 {
 		return true
 	}
 

@@ -68,7 +68,7 @@ func TestIsLeafLongDescriptionNotLeaf(t *testing.T) {
 		Type:        StepWrite,
 	}
 	if node.IsLeaf() {
-		t.Error("13+ word description should not be a leaf")
+		t.Error("long multi-component description should not be a leaf")
 	}
 }
 
@@ -85,9 +85,9 @@ func TestIsLeafSingleFileOverridesLength(t *testing.T) {
 }
 
 func TestIsLeafDepthLimit(t *testing.T) {
-	node := &TaskNode{Depth: 5, Description: "something vague and long and complicated and multi-file"}
+	node := &TaskNode{Depth: 3, Description: "something vague and long and complicated and multi-file"}
 	if !node.IsLeaf() {
-		t.Error("depth 5 should force leaf regardless of content")
+		t.Error("depth 3 should force leaf regardless of content")
 	}
 }
 
